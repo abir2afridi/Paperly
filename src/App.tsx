@@ -36,6 +36,11 @@ import { STARTER_TEMPLATES } from './data/templates';
 import { compileLatexProject } from './services/latexCompiler';
 import { parseBibtex } from './services/bibParser';
 import {
+  CodeThemeId,
+  getStoredCodeThemeId,
+  setStoredCodeThemeId,
+} from './services/codeThemeService';
+import {
   ThemeId,
   getStoredThemeId,
   setStoredThemeId,
@@ -58,6 +63,7 @@ export default function App() {
   // Theme Palette State
   const [activeThemeId, setActiveThemeId] = useState<ThemeId>(getStoredThemeId());
   const [isThemeSelectorOpen, setIsThemeSelectorOpen] = useState(false);
+  const [activeCodeThemeId, setActiveCodeThemeId] = useState<CodeThemeId>(getStoredCodeThemeId());
 
   useEffect(() => {
     const themeDef = getThemeDefinition(activeThemeId);
@@ -66,6 +72,12 @@ export default function App() {
   }, [activeThemeId]);
 
   const activeTheme = getThemeDefinition(activeThemeId);
+
+  // Code palette selection ('match-theme' syncs code colors to the workspace theme)
+  const handleSelectCodeTheme = (codeThemeId: CodeThemeId) => {
+    setActiveCodeThemeId(codeThemeId);
+    setStoredCodeThemeId(codeThemeId);
+  };
 
   // Quick Light/Dark Mode Toggle (preserves chosen family only via modal)
   const handleToggleThemeMode = () => {
@@ -844,6 +856,7 @@ export default function App() {
                     bibEntries={bibEntries}
                     diagnostics={compilationResult?.diagnostics || []}
                     monacoThemeId={activeTheme.monacoThemeId}
+                    codeThemeId={activeCodeThemeId}
                   />
                 ) : (
                   <VisualRichTextEditor
@@ -957,6 +970,8 @@ export default function App() {
         onClose={() => setIsThemeSelectorOpen(false)}
         activeThemeId={activeThemeId}
         onSelectTheme={setActiveThemeId}
+        activeCodeThemeId={activeCodeThemeId}
+        onSelectCodeTheme={handleSelectCodeTheme}
       />
     </>
   );

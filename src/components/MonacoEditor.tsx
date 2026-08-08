@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import Editor, { OnMount, BeforeMount, Monaco } from '@monaco-editor/react';
 import { BibEntry, CompileDiagnostic } from '../types';
+import { CODE_THEMES, CodeThemeId } from '../services/codeThemeService';
 
 interface MonacoEditorProps {
   content: string;
@@ -10,6 +11,7 @@ interface MonacoEditorProps {
   diagnostics: CompileDiagnostic[];
   onCursorPositionChange?: (line: number) => void;
   monacoThemeId?: string;
+  codeThemeId?: CodeThemeId;
 }
 
 export const MonacoEditor: React.FC<MonacoEditorProps> = ({
@@ -20,9 +22,15 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
   diagnostics,
   onCursorPositionChange,
   monacoThemeId = 'overleaf-light-theme',
+  codeThemeId = 'match-theme',
 }) => {
   const editorRef = useRef<unknown>(null);
   const monacoRef = useRef<Monaco | null>(null);
+
+  // 'match-theme' follows the workspace theme; any other selection uses a
+  // fixed VS Code-style palette that is independent of the workspace theme.
+  const effectiveMonacoThemeId =
+    codeThemeId === 'match-theme' ? monacoThemeId : `code-${codeThemeId}`;
 
   const defineMonacoThemes = (monaco: Monaco) => {
     // 1. Overleaf Light
@@ -31,10 +39,16 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
       inherit: true,
       rules: [
         { token: 'keyword', foreground: 'DC2626', fontStyle: 'bold' },
+        { token: 'keyword.control', foreground: 'DC2626', fontStyle: 'bold' },
         { token: 'tag', foreground: 'B91C1C' },
+        { token: 'function', foreground: 'B91C1C' },
+        { token: 'type', foreground: '1D4ED8' },
         { token: 'comment', foreground: '94A3B8', fontStyle: 'italic' },
-        { token: 'string.quote', foreground: 'D97706', fontStyle: 'bold' },
-        { token: 'variable.source', foreground: '1E293B' },
+        { token: 'string', foreground: 'D97706', fontStyle: 'bold' },
+        { token: 'string.delimiter', foreground: 'B45309', fontStyle: 'bold' },
+        { token: 'number', foreground: '059669' },
+        { token: 'operator', foreground: '64748B', fontStyle: 'bold' },
+        { token: 'variable', foreground: '1E293B' },
         { token: 'delimiter', foreground: '64748B' },
       ],
       colors: {
@@ -54,10 +68,16 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
       inherit: true,
       rules: [
         { token: 'keyword', foreground: 'EF4444', fontStyle: 'bold' },
+        { token: 'keyword.control', foreground: 'EF4444', fontStyle: 'bold' },
         { token: 'tag', foreground: 'F87171' },
+        { token: 'function', foreground: 'F87171' },
+        { token: 'type', foreground: '60A5FA' },
         { token: 'comment', foreground: '64748B', fontStyle: 'italic' },
-        { token: 'string.quote', foreground: 'F59E0B', fontStyle: 'bold' },
-        { token: 'variable.source', foreground: 'E2E8F0' },
+        { token: 'string', foreground: 'F59E0B', fontStyle: 'bold' },
+        { token: 'string.delimiter', foreground: 'FBBF24', fontStyle: 'bold' },
+        { token: 'number', foreground: '34D399' },
+        { token: 'operator', foreground: '94A3B8', fontStyle: 'bold' },
+        { token: 'variable', foreground: 'E2E8F0' },
         { token: 'delimiter', foreground: '94A3B8' },
       ],
       colors: {
@@ -77,10 +97,16 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
       inherit: true,
       rules: [
         { token: 'keyword', foreground: '88C0D0', fontStyle: 'bold' },
+        { token: 'keyword.control', foreground: '88C0D0', fontStyle: 'bold' },
         { token: 'tag', foreground: '81A1C1' },
+        { token: 'function', foreground: '81A1C1' },
+        { token: 'type', foreground: 'B48EAD' },
         { token: 'comment', foreground: '6C7A96', fontStyle: 'italic' },
-        { token: 'string.quote', foreground: 'EBCB8B', fontStyle: 'bold' },
-        { token: 'variable.source', foreground: 'D8DEE9' },
+        { token: 'string', foreground: 'EBCB8B', fontStyle: 'bold' },
+        { token: 'string.delimiter', foreground: 'D08770', fontStyle: 'bold' },
+        { token: 'number', foreground: 'A3BE8C' },
+        { token: 'operator', foreground: '8FBCBB', fontStyle: 'bold' },
+        { token: 'variable', foreground: 'D8DEE9' },
         { token: 'delimiter', foreground: '81A1C1' },
       ],
       colors: {
@@ -100,11 +126,17 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
       inherit: true,
       rules: [
         { token: 'keyword', foreground: 'CB4B16', fontStyle: 'bold' },
+        { token: 'keyword.control', foreground: 'CB4B16', fontStyle: 'bold' },
         { token: 'tag', foreground: '268BD2' },
+        { token: 'function', foreground: '268BD2' },
+        { token: 'type', foreground: 'B58900' },
         { token: 'comment', foreground: '93A1A1', fontStyle: 'italic' },
-        { token: 'string.quote', foreground: 'B58900', fontStyle: 'bold' },
-        { token: 'variable.source', foreground: '586E75' },
-        { token: 'delimiter', foreground: '2AA198' },
+        { token: 'string', foreground: '2AA198', fontStyle: 'bold' },
+        { token: 'string.delimiter', foreground: '859900', fontStyle: 'bold' },
+        { token: 'number', foreground: 'D33682' },
+        { token: 'operator', foreground: '859900', fontStyle: 'bold' },
+        { token: 'variable', foreground: '586E75' },
+        { token: 'delimiter', foreground: '93A1A1' },
       ],
       colors: {
         'editor.background': '#FDF6E3',
@@ -123,10 +155,16 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
       inherit: true,
       rules: [
         { token: 'keyword', foreground: '34D399', fontStyle: 'bold' },
+        { token: 'keyword.control', foreground: '34D399', fontStyle: 'bold' },
         { token: 'tag', foreground: '6EE7B7' },
-        { token: 'comment', foreground: '047857', fontStyle: 'italic' },
-        { token: 'string.quote', foreground: 'FBBF24', fontStyle: 'bold' },
-        { token: 'variable.source', foreground: 'A7F3D0' },
+        { token: 'function', foreground: '6EE7B7' },
+        { token: 'type', foreground: 'F472B6' },
+        { token: 'comment', foreground: '3FA17C', fontStyle: 'italic' },
+        { token: 'string', foreground: 'FBBF24', fontStyle: 'bold' },
+        { token: 'string.delimiter', foreground: 'F59E0B', fontStyle: 'bold' },
+        { token: 'number', foreground: 'A7F3D0' },
+        { token: 'operator', foreground: '10B981', fontStyle: 'bold' },
+        { token: 'variable', foreground: 'A7F3D0' },
         { token: 'delimiter', foreground: '10B981' },
       ],
       colors: {
@@ -139,10 +177,22 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
         'editor.selectionBackground': '#04785750',
       },
     });
+
+    // Fixed VS Code-style code palettes (independent of the workspace theme)
+    CODE_THEMES.forEach(codeTheme => {
+      if (codeTheme.isDefault || !codeTheme.monacoThemeId) return;
+      monaco.editor.defineTheme(codeTheme.monacoThemeId, {
+        base: codeTheme.base || 'vs-dark',
+        inherit: true,
+        rules: codeTheme.rules || [],
+        colors: codeTheme.colors || {},
+      });
+    });
   };
 
   const handleBeforeMount: BeforeMount = monaco => {
-    // Register LaTeX monarch tokenizer
+    // Register LaTeX monarch tokenizer with rich token types so code palettes
+    // can color keywords, functions, types, numbers and operators distinctly.
     monaco.languages.register({ id: 'latex' });
 
     monaco.languages.setMonarchTokensProvider('latex', {
@@ -150,33 +200,72 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
       tokenPostfix: '.latex',
 
       keywords: [
-        'begin', 'end', 'section', 'subsection', 'subsubsection', 'paragraph',
+        'section', 'subsection', 'subsubsection', 'paragraph', 'subparagraph',
         'documentclass', 'usepackage', 'title', 'author', 'date', 'maketitle',
         'cite', 'ref', 'label', 'include', 'input', 'bibliography', 'bibliographystyle',
-        'caption', 'centering', 'includegraphics', 'equation', 'figure', 'table'
+        'caption', 'centering', 'includegraphics', 'equation', 'figure', 'table',
+        'newcommand', 'renewcommand', 'newenvironment', 'renewenvironment',
+        'textbf', 'textit', 'underline', 'footnote', 'item', 'enumerate', 'itemize'
       ],
 
       tokenizer: {
         root: [
           [/%.*$/, 'comment'],
-          [/\\(?:[a-zA-Z]+|.)/, {
+          [/\$\$/, 'string.delimiter', '@mathBlock'],
+          [/\$/, 'string.delimiter', '@mathInline'],
+          [/\\begin/, 'keyword.control', '@envName'],
+          [/\\end/, 'keyword.control', '@envName'],
+          [/\\[a-zA-Z]+/, {
             cases: {
               '@keywords': 'keyword',
-              '@default': 'tag'
+              '@default': 'function'
             }
           }],
-          [/\$\$/, 'string.quote', '@mathBlock'],
-          [/\$/, 'string.quote', '@mathInline'],
-          [/[{}()\[\]]/, 'delimiter'],
-          [/\d+/, 'number'],
+          [/\\[^a-zA-Z]/, 'operator'],
+          [/[{}\[\]()]/, 'delimiter'],
+          [/\d+(\.\d+)?/, 'number'],
+          [/[=+<>\-*\/^_]/, 'operator'],
+          [/[,;:]/, 'delimiter'],
+          [/[a-zA-Z][a-zA-Z0-9]*/, '']
+        ],
+        envName: [
+          [/\{([^}]*)\}/, 'type', '@pop'],
+          [/[^{}]+/, 'type'],
+          [/[{}]/, 'type']
         ],
         mathBlock: [
-          [/\$\$/, 'string.quote', '@pop'],
-          [/[^\$]+/, 'variable.source']
+          [/\$\$/, 'string.delimiter', '@pop'],
+          [/%.*$/, 'comment'],
+          [/\\begin/, 'keyword.control', '@envName'],
+          [/\\end/, 'keyword.control', '@envName'],
+          [/\\[a-zA-Z]+/, {
+            cases: {
+              '@keywords': 'keyword',
+              '@default': 'function'
+            }
+          }],
+          [/\\[^a-zA-Z]/, 'operator'],
+          [/\d+(\.\d+)?/, 'number'],
+          [/[=+<>\-*\/^_{}]/, 'operator'],
+          [/[a-zA-Z]+/, 'variable'],
+          [/[^a-zA-Z0-9\\{}]+/, 'variable']
         ],
         mathInline: [
-          [/\$/, 'string.quote', '@pop'],
-          [/[^\$]+/, 'variable.source']
+          [/\$/, 'string.delimiter', '@pop'],
+          [/%.*$/, 'comment'],
+          [/\\begin/, 'keyword.control', '@envName'],
+          [/\\end/, 'keyword.control', '@envName'],
+          [/\\[a-zA-Z]+/, {
+            cases: {
+              '@keywords': 'keyword',
+              '@default': 'function'
+            }
+          }],
+          [/\\[^a-zA-Z]/, 'operator'],
+          [/\d+(\.\d+)?/, 'number'],
+          [/[=+<>\-*\/^_{}]/, 'operator'],
+          [/[a-zA-Z]+/, 'variable'],
+          [/[^a-zA-Z0-9\\{}]+/, 'variable']
         ]
       }
     });
@@ -256,7 +345,7 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     monacoRef.current = monaco;
 
     // Ensure the current theme is applied once the editor exists
-    monaco.editor.setTheme(monacoThemeId);
+    monaco.editor.setTheme(effectiveMonacoThemeId);
 
     // Position change listener for SyncTeX / status tracking
     editor.onDidChangeCursorPosition(e => {
@@ -296,9 +385,9 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
   // Handle dynamic theme change
   useEffect(() => {
     if (monacoRef.current) {
-      monacoRef.current.editor.setTheme(monacoThemeId);
+      monacoRef.current.editor.setTheme(effectiveMonacoThemeId);
     }
-  }, [monacoThemeId]);
+  }, [effectiveMonacoThemeId]);
 
   return (
     <div className="w-full h-full relative overflow-hidden bg-white">
@@ -306,7 +395,7 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
         height="100%"
         defaultLanguage="latex"
         language="latex"
-        theme={monacoThemeId}
+        theme={effectiveMonacoThemeId}
         beforeMount={handleBeforeMount}
         value={content}
         onChange={value => onChange(value || '')}
