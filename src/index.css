@@ -33,130 +33,147 @@ html[data-theme-mode="dark"] {
 }
 
 /* ============================================================
-   Light / Dark Mode Overrides
-   Workspace chrome (Sidebar rail, tooltips, snapshots) is
-   dark-first (slate-950). When a light theme is active, remap
-   those dark palette utilities to light equivalents.
+   Theme System: Workspace Chrome
+   The workspace UI is built with Tailwind slate/white utilities.
+   Each theme (themeService.ts) defines --th-* CSS variables on
+   <html>; they drive the slate palette below so the FULL
+   workspace (Navbar, file tree, tabs, modals, PDF chrome, red
+   accents) follows the selected theme — not just the Monaco
+   editor and the sidebar rail.
    ============================================================ */
 
-html[data-theme-mode="light"] body {
-  background-color: #f8fafc;
+/* Slate palette (and red-50 tint) is theme-driven */
+:root {
+  --color-slate-50: var(--th-surface-2, #f8fafc);
+  --color-slate-100: var(--th-surface-3, #f1f5f9);
+  --color-slate-200: var(--th-surface-4, #e2e8f0);
+  --color-slate-300: var(--th-border, #cbd5e1);
+  --color-slate-400: var(--th-text-4, #94a3b8);
+  --color-slate-500: var(--th-text-4, #64748b);
+  --color-slate-600: var(--th-text-3, #475569);
+  --color-slate-700: var(--th-text-2, #334155);
+  --color-slate-800: var(--th-text-2, #1e293b);
+  --color-slate-900: var(--th-text, #0f172a);
+  --color-slate-950: var(--th-code, #020617);
+  --color-red-50: var(--th-red, #fef2f2);
 }
 
-/* Dark backgrounds -> light surfaces */
-html[data-theme-mode="light"] .bg-slate-950 { background-color: #f8fafc; }
-html[data-theme-mode="light"] .bg-slate-900 { background-color: #f1f5f9; }
-html[data-theme-mode="light"] .bg-slate-800 { background-color: #e2e8f0; }
-html[data-theme-mode="light"] .bg-slate-950\/90 { background-color: rgb(248 250 252 / 0.9); }
-html[data-theme-mode="light"] .bg-slate-950\/70 { background-color: rgb(248 250 252 / 0.7); }
-html[data-theme-mode="light"] .bg-slate-900\/95 { background-color: rgb(241 245 249 / 0.95); }
-html[data-theme-mode="light"] .bg-slate-900\/80 { background-color: rgb(241 245 249 / 0.8); }
+html[data-theme-mode="light"] body {
+  background-color: var(--th-surface-2, #f8fafc);
+}
 
-/* Light text -> dark text */
-html[data-theme-mode="light"] .text-slate-100 { color: #0f172a; }
-html[data-theme-mode="light"] .text-slate-200 { color: #1e293b; }
-html[data-theme-mode="light"] .text-slate-300 { color: #334155; }
-html[data-theme-mode="light"] .text-slate-400 { color: #64748b; }
-html[data-theme-mode="light"] .text-white { color: #0f172a; }
+/* Light themes: dark-first chrome classes -> theme surfaces */
+html[data-theme-mode="light"] .bg-slate-950 { background-color: var(--th-surface-2, #f8fafc); }
+html[data-theme-mode="light"] .bg-slate-900 { background-color: var(--th-surface-3, #f1f5f9); }
+html[data-theme-mode="light"] .bg-slate-800 { background-color: var(--th-surface-4, #e2e8f0); }
+html[data-theme-mode="light"] .bg-slate-950\/90 { background-color: color-mix(in srgb, var(--th-surface-2, #f8fafc) 90%, transparent); }
+html[data-theme-mode="light"] .bg-slate-950\/70 { background-color: color-mix(in srgb, var(--th-surface-2, #f8fafc) 70%, transparent); }
+html[data-theme-mode="light"] .bg-slate-900\/95 { background-color: color-mix(in srgb, var(--th-surface-3, #f1f5f9) 95%, transparent); }
+html[data-theme-mode="light"] .bg-slate-900\/80 { background-color: color-mix(in srgb, var(--th-surface-3, #f1f5f9) 80%, transparent); }
+html[data-theme-mode="light"] .bg-white { background-color: var(--th-bg, #ffffff); }
 
-/* Dark borders -> light borders */
-html[data-theme-mode="light"] .border-slate-700 { border-color: #cbd5e1; }
-html[data-theme-mode="light"] .border-slate-800 { border-color: #e2e8f0; }
-html[data-theme-mode="light"] .border-slate-800\/80 { border-color: rgb(226 232 240 / 0.8); }
+/* Light text -> theme text */
+html[data-theme-mode="light"] .text-slate-100 { color: var(--th-text, #0f172a); }
+html[data-theme-mode="light"] .text-slate-200 { color: var(--th-text-2, #1e293b); }
+html[data-theme-mode="light"] .text-slate-300 { color: var(--th-text-2, #334155); }
+html[data-theme-mode="light"] .text-slate-400 { color: var(--th-text-4, #64748b); }
+html[data-theme-mode="light"] .text-white { color: var(--th-text, #0f172a); }
 
-/* Red accents -> light red tint surfaces */
-html[data-theme-mode="light"] .bg-red-950 { background-color: #fee2e2; }
-html[data-theme-mode="light"] .bg-red-950\/70 { background-color: rgb(254 226 226 / 0.7); }
-html[data-theme-mode="light"] .bg-red-950\/80 { background-color: rgb(254 226 226 / 0.8); }
-html[data-theme-mode="light"] .text-red-300 { color: #dc2626; }
-html[data-theme-mode="light"] .text-red-400 { color: #dc2626; }
-html[data-theme-mode="light"] .border-red-700\/80 { border-color: rgb(252 165 165 / 0.8); }
-html[data-theme-mode="light"] .border-red-800\/60 { border-color: rgb(252 165 165 / 0.6); }
-html[data-theme-mode="light"] .border-red-800\/80 { border-color: rgb(252 165 165 / 0.8); }
+/* Dark borders -> theme borders */
+html[data-theme-mode="light"] .border-slate-700 { border-color: var(--th-border, #cbd5e1); }
+html[data-theme-mode="light"] .border-slate-800 { border-color: var(--th-surface-4, #e2e8f0); }
+html[data-theme-mode="light"] .border-slate-800\/80 { border-color: color-mix(in srgb, var(--th-surface-4, #e2e8f0) 80%, transparent); }
 
-/* Amber accents */
+/* Red accents -> theme red tint + accent */
+html[data-theme-mode="light"] .bg-red-950 { background-color: var(--th-red, #fee2e2); }
+html[data-theme-mode="light"] .bg-red-950\/70 { background-color: color-mix(in srgb, var(--th-red, #fee2e2) 70%, transparent); }
+html[data-theme-mode="light"] .bg-red-950\/80 { background-color: color-mix(in srgb, var(--th-red, #fee2e2) 80%, transparent); }
+html[data-theme-mode="light"] .text-red-300 { color: var(--th-accent, #dc2626); }
+html[data-theme-mode="light"] .text-red-400 { color: var(--th-accent, #dc2626); }
+html[data-theme-mode="light"] .border-red-700\/80 { border-color: color-mix(in srgb, var(--th-accent, #dc2626) 80%, transparent); }
+html[data-theme-mode="light"] .border-red-800\/60 { border-color: color-mix(in srgb, var(--th-accent, #dc2626) 60%, transparent); }
+html[data-theme-mode="light"] .border-red-800\/80 { border-color: color-mix(in srgb, var(--th-accent, #dc2626) 80%, transparent); }
+
+/* Amber accents (semantic, static) */
 html[data-theme-mode="light"] .bg-amber-950\/80 { background-color: rgb(254 243 199 / 0.8); }
 html[data-theme-mode="light"] .text-amber-200 { color: #b45309; }
 html[data-theme-mode="light"] .text-amber-300 { color: #b45309; }
 html[data-theme-mode="light"] .text-amber-400 { color: #b45309; }
 html[data-theme-mode="light"] .border-amber-800\/80 { border-color: rgb(252 211 77 / 0.8); }
 
-/* Emerald / Cyan accents (demo code + dashboard) */
+/* Emerald / Cyan accents (demo code + dashboard, static) */
 html[data-theme-mode="light"] .text-emerald-300 { color: #047857; }
 html[data-theme-mode="light"] .text-emerald-400 { color: #047857; }
 html[data-theme-mode="light"] .text-cyan-300 { color: #0e7490; }
 
 /* Hover states */
-html[data-theme-mode="light"] .hover\:bg-slate-800:hover { background-color: #e2e8f0; }
-html[data-theme-mode="light"] .hover\:bg-slate-700:hover { background-color: #e2e8f0; }
-html[data-theme-mode="light"] .hover\:text-white:hover { color: #0f172a; }
+html[data-theme-mode="light"] .hover\:bg-slate-800:hover { background-color: var(--th-surface-4, #e2e8f0); }
+html[data-theme-mode="light"] .hover\:bg-slate-700:hover { background-color: var(--th-surface-4, #e2e8f0); }
+html[data-theme-mode="light"] .hover\:text-white:hover { color: var(--th-text, #0f172a); }
 
 /* Gradient hero/banner sections */
-html[data-theme-mode="light"] .from-slate-950 { --tw-gradient-from: #f8fafc; }
-html[data-theme-mode="light"] .from-slate-900 { --tw-gradient-from: #f1f5f9; }
-html[data-theme-mode="light"] .via-slate-900 { --tw-gradient-via: #f1f5f9; }
-html[data-theme-mode="light"] .to-slate-950 { --tw-gradient-to: #f8fafc; }
+html[data-theme-mode="light"] .from-slate-950 { --tw-gradient-from: var(--th-surface-2, #f8fafc); }
+html[data-theme-mode="light"] .from-slate-900 { --tw-gradient-from: var(--th-surface-3, #f1f5f9); }
+html[data-theme-mode="light"] .via-slate-900 { --tw-gradient-via: var(--th-surface-3, #f1f5f9); }
+html[data-theme-mode="light"] .to-slate-950 { --tw-gradient-to: var(--th-surface-2, #f8fafc); }
 
-/* Colored CTA buttons must keep white text in light mode */
-html[data-theme-mode="light"] .bg-\[\#D11111\].text-white { color: #ffffff; }
+/* Colored CTA buttons: text color follows accent contrast */
+html[data-theme-mode="light"] .bg-\[\#D11111\].text-white { color: var(--th-on-accent, #ffffff); }
 html[data-theme-mode="light"] .bg-emerald-600.text-white { color: #ffffff; }
-html[data-theme-mode="light"] .hover\:bg-\[\#D11111\]:hover.hover\:text-white:hover { color: #ffffff; }
+html[data-theme-mode="light"] .hover\:bg-\[\#D11111\]:hover.hover\:text-white:hover { color: var(--th-on-accent, #ffffff); }
 
 /* Grid pattern light variant */
 html[data-theme-mode="light"] .grid-pattern-dark {
-  background-image: radial-gradient(rgba(209, 17, 17, 0.15) 1px, transparent 1px);
+  background-image: radial-gradient(color-mix(in srgb, var(--th-accent, #d11111) 15%, transparent) 1px, transparent 1px);
 }
+
+/* ============================================================
+   Dark themes: workspace chrome
+   ============================================================ */
+
+html[data-theme-mode="dark"] .bg-white { background-color: var(--th-bg, #0f172a); }
+
+/* Dark surfaces that must stay dark (icon rail, code blocks, tooltips, dark buttons) */
+html[data-theme-mode="dark"] .bg-slate-700 { background-color: var(--th-surface-3, #273244); }
+html[data-theme-mode="dark"] .bg-slate-800 { background-color: var(--th-surface-2, #1e293b); }
+html[data-theme-mode="dark"] .bg-slate-900 { background-color: var(--th-bg, #0f172a); }
+html[data-theme-mode="dark"] .bg-slate-950 { background-color: var(--th-code, #0b1220); }
+html[data-theme-mode="dark"] .hover\:bg-slate-700:hover { background-color: var(--th-surface-3, #273244); }
+html[data-theme-mode="dark"] .hover\:bg-slate-800:hover { background-color: var(--th-surface-2, #1e293b); }
+
+/* Code/dark previews: keep text readable */
+html[data-theme-mode="dark"] .bg-slate-900 { color: var(--th-text-3, #cbd5e1); }
+
+/* Light-gray text that must stay light on dark surfaces */
+html[data-theme-mode="dark"] .text-slate-100 { color: var(--th-text-2, #e2e8f0); }
+html[data-theme-mode="dark"] .text-slate-200 { color: var(--th-text-3, #cbd5e1); }
+html[data-theme-mode="dark"] .text-slate-300 { color: var(--th-text-4, #94a3b8); }
+html[data-theme-mode="dark"] .text-slate-400 { color: var(--th-text-4, #94a3b8); }
+
+/* Borders around dark surfaces stay dark */
+html[data-theme-mode="dark"] .border-slate-700 { border-color: var(--th-border-2, #475569); }
+html[data-theme-mode="dark"] .border-slate-800 { border-color: var(--th-border-2, #334155); }
+html[data-theme-mode="dark"] .border-slate-900 { border-color: var(--th-border-2, #334155); }
+
+/* Grid pattern dark variant */
+html[data-theme-mode="dark"] .grid-pattern-dark {
+  background-image: radial-gradient(color-mix(in srgb, var(--th-on-accent, #ffffff) 20%, transparent) 1px, transparent 1px);
+}
+
+/* ============================================================
+   Accent theming (both modes): brand red becomes theme accent
+   ============================================================ */
+.bg-\[\#D11111\] { background-color: var(--th-accent, #d11111); }
+.text-\[\#D11111\] { color: var(--th-accent, #d11111); }
+.border-\[\#D11111\] { border-color: var(--th-accent, #d11111); }
+.border-red-600 { border-color: var(--th-accent, #d11111); }
+.hover\:bg-\[\#D11111\]:hover { background-color: var(--th-accent, #d11111); }
+.hover\:text-\[\#D11111\]:hover { color: var(--th-accent, #d11111); }
+.bg-\[\#D11111\].text-white { color: var(--th-on-accent, #ffffff); }
+.hover\:bg-\[\#D11111\]:hover.hover\:text-white:hover { color: var(--th-on-accent, #ffffff); }
 
 /* Faint editorial paper grid (used on landing/dashboard heroes) */
 .grid-pattern-paper {
   background-image: radial-gradient(rgba(25, 25, 25, 0.08) 1px, transparent 1px);
   background-size: 26px 26px;
 }
-
-/* ============================================================
-   Dark Mode: Workspace Chrome
-   When a dark theme is active (data-theme-mode="dark"), flip the
-   light workspace surfaces (white / slate panels) to dark so the
-   whole editor page goes dark — not just the Monaco canvas.
-   ============================================================ */
-
-html[data-theme-mode="dark"] {
-  /* Slate palette -> dark variants (surfaces, borders and dark text all flip) */
-  --color-slate-50: #16203a;
-  --color-slate-100: #1e293b;
-  --color-slate-200: #334155;
-  --color-slate-300: #475569;
-  --color-slate-400: #64748b;
-  --color-slate-500: #94a3b8;
-  --color-slate-600: #cbd5e1;
-  --color-slate-700: #e2e8f0;
-  --color-slate-800: #f1f5f9;
-  --color-slate-900: #f8fafc;
-  --color-slate-950: #0b1220;
-  --color-red-50: #2b1215;
-}
-
-/* White surfaces -> dark surfaces */
-html[data-theme-mode="dark"] .bg-white { background-color: #0f172a; }
-
-/* Dark surfaces that must stay dark (icon rail, code blocks, tooltips, dark buttons) */
-html[data-theme-mode="dark"] .bg-slate-700 { background-color: #273244; }
-html[data-theme-mode="dark"] .bg-slate-800 { background-color: #1e293b; }
-html[data-theme-mode="dark"] .bg-slate-900 { background-color: #0f172a; }
-html[data-theme-mode="dark"] .bg-slate-950 { background-color: #0b1220; }
-html[data-theme-mode="dark"] .hover\:bg-slate-700:hover { background-color: #273244; }
-html[data-theme-mode="dark"] .hover\:bg-slate-800:hover { background-color: #1e293b; }
-
-/* Code/dark previews: keep text readable */
-html[data-theme-mode="dark"] .bg-slate-900 { color: #cbd5e1; }
-
-/* Light-gray text that must stay light on dark surfaces */
-html[data-theme-mode="dark"] .text-slate-100 { color: #e2e8f0; }
-html[data-theme-mode="dark"] .text-slate-200 { color: #cbd5e1; }
-html[data-theme-mode="dark"] .text-slate-300 { color: #94a3b8; }
-html[data-theme-mode="dark"] .text-slate-400 { color: #94a3b8; }
-
-/* Borders around dark surfaces stay dark */
-html[data-theme-mode="dark"] .border-slate-700 { border-color: #475569; }
-html[data-theme-mode="dark"] .border-slate-800 { border-color: #334155; }
-html[data-theme-mode="dark"] .border-slate-900 { border-color: #334155; }
