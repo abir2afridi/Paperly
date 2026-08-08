@@ -1,40 +1,114 @@
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..800;1,6..72,300..800&family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=JetBrains+Mono:ital,wght@0,400..800;1,400..800&display=swap');
 @import "tailwindcss";
 @import "katex/dist/katex.min.css";
 
+@theme {
+  --font-editorial: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-editorial-sans: 'Plus Jakarta Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-editorial-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, 'SFMono-Regular', monospace;
+
+  /* Editorial Paper & Scholarly Journal palette */
+  --color-canvas: #fcfaf7;
+  --color-paper: #f4f0e8;
+  --color-paper-deep: #ece9e4;
+  --color-ink: #191919;
+  --color-ink-muted: #706c64;
+  --color-ink-muted-2: #55524d;
+}
+
+/* Dark editorial variant — swaps the token values on the html element */
+html[data-theme-mode="dark"] {
+  --color-canvas: #17140f;
+  --color-paper: #211e19;
+  --color-paper-deep: #2a2620;
+  --color-ink: #f2ede3;
+  --color-ink-muted: #a49d90;
+  --color-ink-muted-2: #8d867a;
+}
+
 @layer base {
   body {
-    @apply bg-white text-slate-900 font-sans antialiased overflow-hidden;
+    @apply bg-canvas text-ink font-sans antialiased;
   }
 }
 
-.grid-pattern {
+/* ============================================================
+   Light / Dark Mode Overrides
+   Workspace chrome (Sidebar rail, tooltips, snapshots) is
+   dark-first (slate-950). When a light theme is active, remap
+   those dark palette utilities to light equivalents.
+   ============================================================ */
+
+html[data-theme-mode="light"] body {
+  background-color: #f8fafc;
+}
+
+/* Dark backgrounds -> light surfaces */
+html[data-theme-mode="light"] .bg-slate-950 { background-color: #f8fafc; }
+html[data-theme-mode="light"] .bg-slate-900 { background-color: #f1f5f9; }
+html[data-theme-mode="light"] .bg-slate-800 { background-color: #e2e8f0; }
+html[data-theme-mode="light"] .bg-slate-950\/90 { background-color: rgb(248 250 252 / 0.9); }
+html[data-theme-mode="light"] .bg-slate-950\/70 { background-color: rgb(248 250 252 / 0.7); }
+html[data-theme-mode="light"] .bg-slate-900\/95 { background-color: rgb(241 245 249 / 0.95); }
+html[data-theme-mode="light"] .bg-slate-900\/80 { background-color: rgb(241 245 249 / 0.8); }
+
+/* Light text -> dark text */
+html[data-theme-mode="light"] .text-slate-100 { color: #0f172a; }
+html[data-theme-mode="light"] .text-slate-200 { color: #1e293b; }
+html[data-theme-mode="light"] .text-slate-300 { color: #334155; }
+html[data-theme-mode="light"] .text-slate-400 { color: #64748b; }
+html[data-theme-mode="light"] .text-white { color: #0f172a; }
+
+/* Dark borders -> light borders */
+html[data-theme-mode="light"] .border-slate-700 { border-color: #cbd5e1; }
+html[data-theme-mode="light"] .border-slate-800 { border-color: #e2e8f0; }
+html[data-theme-mode="light"] .border-slate-800\/80 { border-color: rgb(226 232 240 / 0.8); }
+
+/* Red accents -> light red tint surfaces */
+html[data-theme-mode="light"] .bg-red-950 { background-color: #fee2e2; }
+html[data-theme-mode="light"] .bg-red-950\/70 { background-color: rgb(254 226 226 / 0.7); }
+html[data-theme-mode="light"] .bg-red-950\/80 { background-color: rgb(254 226 226 / 0.8); }
+html[data-theme-mode="light"] .text-red-300 { color: #dc2626; }
+html[data-theme-mode="light"] .text-red-400 { color: #dc2626; }
+html[data-theme-mode="light"] .border-red-700\/80 { border-color: rgb(252 165 165 / 0.8); }
+html[data-theme-mode="light"] .border-red-800\/60 { border-color: rgb(252 165 165 / 0.6); }
+html[data-theme-mode="light"] .border-red-800\/80 { border-color: rgb(252 165 165 / 0.8); }
+
+/* Amber accents */
+html[data-theme-mode="light"] .bg-amber-950\/80 { background-color: rgb(254 243 199 / 0.8); }
+html[data-theme-mode="light"] .text-amber-200 { color: #b45309; }
+html[data-theme-mode="light"] .text-amber-300 { color: #b45309; }
+html[data-theme-mode="light"] .text-amber-400 { color: #b45309; }
+html[data-theme-mode="light"] .border-amber-800\/80 { border-color: rgb(252 211 77 / 0.8); }
+
+/* Emerald / Cyan accents (demo code + dashboard) */
+html[data-theme-mode="light"] .text-emerald-300 { color: #047857; }
+html[data-theme-mode="light"] .text-emerald-400 { color: #047857; }
+html[data-theme-mode="light"] .text-cyan-300 { color: #0e7490; }
+
+/* Hover states */
+html[data-theme-mode="light"] .hover\:bg-slate-800:hover { background-color: #e2e8f0; }
+html[data-theme-mode="light"] .hover\:bg-slate-700:hover { background-color: #e2e8f0; }
+html[data-theme-mode="light"] .hover\:text-white:hover { color: #0f172a; }
+
+/* Gradient hero/banner sections */
+html[data-theme-mode="light"] .from-slate-950 { --tw-gradient-from: #f8fafc; }
+html[data-theme-mode="light"] .from-slate-900 { --tw-gradient-from: #f1f5f9; }
+html[data-theme-mode="light"] .via-slate-900 { --tw-gradient-via: #f1f5f9; }
+html[data-theme-mode="light"] .to-slate-950 { --tw-gradient-to: #f8fafc; }
+
+/* Colored CTA buttons must keep white text in light mode */
+html[data-theme-mode="light"] .bg-\[\#D11111\].text-white { color: #ffffff; }
+html[data-theme-mode="light"] .bg-emerald-600.text-white { color: #ffffff; }
+html[data-theme-mode="light"] .hover\:bg-\[\#D11111\]:hover.hover\:text-white:hover { color: #ffffff; }
+
+/* Grid pattern light variant */
+html[data-theme-mode="light"] .grid-pattern-dark {
   background-image: radial-gradient(rgba(209, 17, 17, 0.15) 1px, transparent 1px);
-  background-size: 24px 24px;
 }
 
-.grid-pattern-dark {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.15) 1px, transparent 1px);
-  background-size: 24px 24px;
+/* Faint editorial paper grid (used on landing/dashboard heroes) */
+.grid-pattern-paper {
+  background-image: radial-gradient(rgba(25, 25, 25, 0.08) 1px, transparent 1px);
+  background-size: 26px 26px;
 }
-
-.outline-text {
-  -webkit-text-stroke: 1px #D11111;
-  color: transparent;
-}
-
-/* Custom Red & White Scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #F8FAFC;
-}
-::-webkit-scrollbar-thumb {
-  background: #E2E8F0;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #D11111;
-}
-

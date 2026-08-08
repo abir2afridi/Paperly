@@ -40,6 +40,7 @@ import {
   getStoredThemeId,
   setStoredThemeId,
   getThemeDefinition,
+  getOppositeThemeId,
   applyThemeToDOM,
 } from './services/themeService';
 
@@ -65,6 +66,11 @@ export default function App() {
   }, [activeThemeId]);
 
   const activeTheme = getThemeDefinition(activeThemeId);
+
+  // Quick Light/Dark Mode Toggle (preserves chosen family only via modal)
+  const handleToggleThemeMode = () => {
+    setActiveThemeId(prev => getOppositeThemeId(prev));
+  };
 
   // Initial Seed Projects with Explicit Serials (#01, #02, #03...)
   const seedProject1: Project = {
@@ -710,6 +716,8 @@ export default function App() {
           onLaunchEditor={handleLaunchEditor}
           onOpenThemeSelector={() => setIsThemeSelectorOpen(true)}
           activeThemeId={activeThemeId}
+          activeThemeMode={activeTheme.mode}
+          onToggleThemeMode={handleToggleThemeMode}
           projects={projectsList}
         />
       )}
@@ -734,6 +742,8 @@ export default function App() {
           onGoHome={() => setCurrentView('landing')}
           onOpenThemeSelector={() => setIsThemeSelectorOpen(true)}
           activeThemeId={activeThemeId}
+          activeThemeMode={activeTheme.mode}
+          onToggleThemeMode={handleToggleThemeMode}
         />
       )}
 
@@ -749,6 +759,8 @@ export default function App() {
             onOpenSettings={() => setIsSettingsOpen(true)}
             onOpenThemeSelector={() => setIsThemeSelectorOpen(true)}
             onOpenTemplates={() => setIsTemplatesOpen(true)}
+            onToggleThemeMode={handleToggleThemeMode}
+            activeThemeMode={activeTheme.mode}
             onOpenDoiModal={() => setIsDoiModalOpen(true)}
             onOpenMathPalette={() => setIsMathPaletteOpen(true)}
             onOpenTableEditor={() => setIsTableEditorOpen(true)}

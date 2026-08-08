@@ -189,6 +189,12 @@ export function getThemeDefinition(themeId: ThemeId): ThemeDefinition {
   return THEMES.find(t => t.id === themeId) || THEMES[0];
 }
 
+// Returns the opposite mode (light <-> dark) counterpart theme id
+export function getOppositeThemeId(themeId: ThemeId): ThemeId {
+  const theme = getThemeDefinition(themeId);
+  return theme.mode === 'dark' ? 'overleaf-light' : 'overleaf-dark';
+}
+
 export function applyThemeToDOM(theme: ThemeDefinition): void {
   const root = document.documentElement;
   root.setAttribute('data-theme', theme.id);

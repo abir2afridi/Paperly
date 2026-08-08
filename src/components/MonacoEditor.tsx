@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import Editor, { OnMount, Monaco } from '@monaco-editor/react';
+import Editor, { OnMount, BeforeMount, Monaco } from '@monaco-editor/react';
 import { BibEntry, CompileDiagnostic } from '../types';
 
 interface MonacoEditorProps {
@@ -141,10 +141,7 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     });
   };
 
-  const handleEditorMount: OnMount = (editor, monaco) => {
-    editorRef.current = editor;
-    monacoRef.current = monaco;
-
+  const handleBeforeMount: BeforeMount = monaco => {
     // Register LaTeX monarch tokenizer
     monaco.languages.register({ id: 'latex' });
 
@@ -184,8 +181,8 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
       }
     });
 
+    // Define all workspace themes BEFORE the editor is created
     defineMonacoThemes(monaco);
-    monaco.editor.setTheme(monacoThemeId);
 
     // Register LaTeX Autocomplete Provider (\cite{}, \ref{}, \begin{}...\end{})
     monaco.languages.registerCompletionItemProvider('latex', {
@@ -252,6 +249,14 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
         return { suggestions };
       }
     });
+  };
+
+  const handleEditorMount: OnMount = (editor, monaco) => {
+    editorRef.current = editor;
+    monacoRef.current = monaco;
+
+    // Ensure the current theme is applied once the editor exists
+    monaco.editor.setTheme(monacoThemeId);
 
     // Position change listener for SyncTeX / status tracking
     editor.onDidChangeCursorPosition(e => {
@@ -301,6 +306,8 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
         height="100%"
         defaultLanguage="latex"
         language="latex"
+        theme={monacoThemeId}
+        beforeMount={handleBeforeMount}
         value={content}
         onChange={value => onChange(value || '')}
         onMount={handleEditorMount}

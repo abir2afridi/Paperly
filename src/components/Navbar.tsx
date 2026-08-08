@@ -17,6 +17,8 @@ import {
   Loader2,
   Plus,
   Palette,
+  Sun,
+  Moon,
   Home,
   Keyboard,
 } from 'lucide-react';
@@ -31,6 +33,8 @@ interface NavbarProps {
   onOpenSettings: () => void;
   onOpenThemeSelector: () => void;
   onOpenTemplates: () => void;
+  onToggleThemeMode: () => void;
+  activeThemeMode: 'light' | 'dark';
   onOpenDoiModal: () => void;
   onOpenMathPalette: () => void;
   onOpenTableEditor: () => void;
@@ -55,6 +59,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSettings,
   onOpenThemeSelector,
   onOpenTemplates,
+  onToggleThemeMode,
+  activeThemeMode,
   onOpenDoiModal,
   onOpenMathPalette,
   onOpenTableEditor,
@@ -260,6 +266,18 @@ export const Navbar: React.FC<NavbarProps> = ({
         >
           <Sparkles className="w-3.5 h-3.5 text-current" />
           <span className="hidden sm:inline">AI Helper</span>
+        </button>
+
+        <button
+          onClick={onToggleThemeMode}
+          className="p-1.5 text-slate-600 hover:text-[#D11111] hover:bg-red-50 transition-colors border border-transparent hover:border-red-200"
+          title={activeThemeMode === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        >
+          {activeThemeMode === 'dark' ? (
+            <Sun className="w-4 h-4 text-amber-500" />
+          ) : (
+            <Moon className="w-4 h-4 text-slate-700" />
+          )}
         </button>
 
         <button
