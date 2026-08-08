@@ -1,0 +1,6 @@
+{
+  "name": "TeXForge",
+  "description": "Free, open, collaborative LaTeX editing platform with real compilation, rich editor features, AI integration, and live PDF rendering.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

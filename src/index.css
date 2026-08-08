@@ -1,0 +1,40 @@
+@import "tailwindcss";
+@import "katex/dist/katex.min.css";
+
+@layer base {
+  body {
+    @apply bg-white text-slate-900 font-sans antialiased overflow-hidden;
+  }
+}
+
+.grid-pattern {
+  background-image: radial-gradient(rgba(209, 17, 17, 0.15) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.grid-pattern-dark {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.15) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.outline-text {
+  -webkit-text-stroke: 1px #D11111;
+  color: transparent;
+}
+
+/* Custom Red & White Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F8FAFC;
+}
+::-webkit-scrollbar-thumb {
+  background: #E2E8F0;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #D11111;
+}
+
