@@ -112,3 +112,51 @@ html[data-theme-mode="light"] .grid-pattern-dark {
   background-image: radial-gradient(rgba(25, 25, 25, 0.08) 1px, transparent 1px);
   background-size: 26px 26px;
 }
+
+/* ============================================================
+   Dark Mode: Workspace Chrome
+   When a dark theme is active (data-theme-mode="dark"), flip the
+   light workspace surfaces (white / slate panels) to dark so the
+   whole editor page goes dark — not just the Monaco canvas.
+   ============================================================ */
+
+html[data-theme-mode="dark"] {
+  /* Slate palette -> dark variants (surfaces, borders and dark text all flip) */
+  --color-slate-50: #16203a;
+  --color-slate-100: #1e293b;
+  --color-slate-200: #334155;
+  --color-slate-300: #475569;
+  --color-slate-400: #64748b;
+  --color-slate-500: #94a3b8;
+  --color-slate-600: #cbd5e1;
+  --color-slate-700: #e2e8f0;
+  --color-slate-800: #f1f5f9;
+  --color-slate-900: #f8fafc;
+  --color-slate-950: #0b1220;
+  --color-red-50: #2b1215;
+}
+
+/* White surfaces -> dark surfaces */
+html[data-theme-mode="dark"] .bg-white { background-color: #0f172a; }
+
+/* Dark surfaces that must stay dark (icon rail, code blocks, tooltips, dark buttons) */
+html[data-theme-mode="dark"] .bg-slate-700 { background-color: #273244; }
+html[data-theme-mode="dark"] .bg-slate-800 { background-color: #1e293b; }
+html[data-theme-mode="dark"] .bg-slate-900 { background-color: #0f172a; }
+html[data-theme-mode="dark"] .bg-slate-950 { background-color: #0b1220; }
+html[data-theme-mode="dark"] .hover\:bg-slate-700:hover { background-color: #273244; }
+html[data-theme-mode="dark"] .hover\:bg-slate-800:hover { background-color: #1e293b; }
+
+/* Code/dark previews: keep text readable */
+html[data-theme-mode="dark"] .bg-slate-900 { color: #cbd5e1; }
+
+/* Light-gray text that must stay light on dark surfaces */
+html[data-theme-mode="dark"] .text-slate-100 { color: #e2e8f0; }
+html[data-theme-mode="dark"] .text-slate-200 { color: #cbd5e1; }
+html[data-theme-mode="dark"] .text-slate-300 { color: #94a3b8; }
+html[data-theme-mode="dark"] .text-slate-400 { color: #94a3b8; }
+
+/* Borders around dark surfaces stay dark */
+html[data-theme-mode="dark"] .border-slate-700 { border-color: #475569; }
+html[data-theme-mode="dark"] .border-slate-800 { border-color: #334155; }
+html[data-theme-mode="dark"] .border-slate-900 { border-color: #334155; }
