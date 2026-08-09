@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import JSZip from 'jszip';
-import { Code, Eye, Palette } from 'lucide-react';
+import { Code, Eye } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { MonacoEditor } from './components/MonacoEditor';
@@ -833,16 +833,6 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center space-x-3 font-mono text-slate-500 font-normal">
-                  <button
-                    onClick={() => setIsThemeSelectorOpen(true)}
-                    className="flex items-center space-x-1 px-2 py-0.5 bg-white border border-slate-300 hover:border-red-400 hover:text-[#D11111] text-slate-700 text-[10px] font-bold uppercase tracking-wider transition-colors"
-                    title="Change Workspace & Code Theme"
-                  >
-                    <Palette className="w-3 h-3 text-[#D11111]" />
-                    <span className="hidden sm:inline">Theme:</span>
-                    <span className="font-extrabold text-slate-900">{activeTheme.name}</span>
-                  </button>
-
                   <span>{activeFilePath}</span>
                 </div>
               </div>
