@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { AIProviderConfig } from '../types';
 import { THEMES, ThemeId, ThemeDefinition } from '../services/themeService';
+import { isTauri, aiTestProvider } from '../desktop/bridge';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -67,24 +68,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/ai/providers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          label,
-          providerType,
-          baseUrl,
-          apiKey,
-          model,
-          isDefault,
-        }),
-      });
+      let created: { id: string };
 
-      if (!res.ok) {
-        throw new Error('Failed to create AI provider.');
+      if (isTauri()) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        created = await invoke<{ id: string }>('create_provider', {
+          input: { label, providerType, baseUrl, apiKey, model, isDefault },
+        });
+      } else {
+        const res = await fetch('/api/ai/providers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            label,
+            providerType,
+            baseUrl,
+            apiKey,
+            model,
+            isDefault,
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error('Failed to create AI provider.');
+        }
+
+        created = await res.json();
       }
 
-      const created = await res.json();
       onRefreshProviders();
       setIsAdding(false);
       setApiKey('');
@@ -103,22 +114,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setTestResults(prev => ({ ...prev, [id]: { ok: false, msg: 'Testing...' } }));
 
     try {
-      const res = await fetch(`/api/ai/providers/${id}/test`, { method: 'POST' });
-      const data = await res.json();
-
-      if (res.ok && data.ok) {
-        setTestResults(prev => ({ ...prev, [id]: { ok: true, msg: data.message } }));
-      } else {
-        setTestResults(prev => ({ ...prev, [id]: { ok: false, msg: data.error || 'Connection failed' } }));
-      }
+      const data = await aiTestProvider(id);
+      setTestResults(prev => ({ ...prev, [id]: { ok: true, msg: data.message } }));
       onRefreshProviders();
-    } catch {
-      setTestResults(prev => ({ ...prev, [id]: { ok: false, msg: 'Network failure during test' } }));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setTestResults(prev => ({ ...prev, [id]: { ok: false, msg } }));
     }
   };
 
   const handleDeleteProvider = async (id: string) => {
-    await fetch(`/api/ai/providers/${id}`, { method: 'DELETE' });
+    if (isTauri()) {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('delete_provider', { id });
+    } else {
+      await fetch(`/api/ai/providers/${id}`, { method: 'DELETE' });
+    }
     onRefreshProviders();
   };
 

@@ -15,6 +15,7 @@ import {
   Send,
 } from 'lucide-react';
 import { CompileDiagnostic, AIProviderConfig } from '../types';
+import { aiGenerate } from '../desktop/bridge';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -75,21 +76,7 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
     setErrorMsg(null);
 
     try {
-      const res = await fetch('/api/ai/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          providerId: activeProvider?.id,
-          prompt: question,
-          context: activeFileContent,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'AI generation failed.');
-      }
-
+      const data = await aiGenerate(activeProvider?.id, question, activeFileContent);
       setChatMessages(prev => [...prev, { role: 'assistant', content: data.result }]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -125,21 +112,7 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
     }
 
     try {
-      const res = await fetch('/api/ai/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          providerId: activeProvider?.id,
-          prompt,
-          context,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'AI generation failed.');
-      }
-
+      const data = await aiGenerate(activeProvider?.id, prompt, context);
       setAiResult(data.result);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);

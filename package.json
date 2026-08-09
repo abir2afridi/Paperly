@@ -5,15 +5,23 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "dev:vite": "vite",
+    "build": "npm run vendor:monaco && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build:desktop": "npm run vendor:monaco && vite build",
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "node --stack-size=12000 node_modules/typescript/bin/tsc --noEmit",
+    "vendor:monaco": "node scripts/vendor-monaco.mjs",
+    "sync:tauri-conf": "node scripts/sync-tauri-conf.mjs",
+    "gen:icons": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/gen-icons.ps1",
+    "tauri:dev": "npm run sync:tauri-conf && tauri dev",
+    "tauri:build": "npm run sync:tauri-conf && tauri build"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
     "@monaco-editor/react": "^4.7.0",
+    "@tauri-apps/api": "^2.5.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "dotenv": "^17.2.3",
@@ -30,11 +38,13 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.5.0",
     "@types/express": "^4.17.21",
     "@types/katex": "^0.16.8",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
+    "monaco-editor": "^0.56.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",

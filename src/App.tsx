@@ -17,9 +17,17 @@ import { ChatAndActivity } from './components/ChatAndActivity';
 import { VersionHistoryModal } from './components/VersionHistoryModal';
 import { ThemeSelectorModal } from './components/ThemeSelectorModal';
 import { ShortcutsModal } from './components/ShortcutsModal';
+import { AboutModal } from './components/AboutModal';
 import { LandingPage } from './components/LandingPage';
 import { DashboardView } from './components/DashboardView';
 import { AuthModal } from './components/AuthModal';
+import {
+  isTauri,
+  onMenuEvent,
+  loadProvidersFile,
+  pickImportZip,
+  pickExportZip,
+} from './desktop/bridge';
 
 import {
   Project,
@@ -60,6 +68,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role: string } | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'signup'>('login');
+  const [isAboutOpen, setIsAboutOpen] = useState(false);
 
   // Theme Palette State
   const [activeThemeId, setActiveThemeId] = useState<ThemeId>(getStoredThemeId());
@@ -300,9 +309,13 @@ export default function App() {
   const bibFile = project.files.find(f => f.path.endsWith('.bib'));
   const bibEntries = bibFile && bibFile.content ? parseBibtex(bibFile.content) : [];
 
-  // Fetch AI providers from backend
+  // Fetch AI providers from backend (or the Tauri bridge on desktop)
   const refreshProviders = useCallback(async () => {
     try {
+      if (isTauri()) {
+        setProviders(await loadProvidersFile());
+        return;
+      }
       const res = await fetch('/api/ai/providers');
       if (res.ok) {
         const data = await res.json();
@@ -316,6 +329,52 @@ export default function App() {
   useEffect(() => {
     refreshProviders();
   }, [refreshProviders]);
+
+  // Native desktop menu events (Tauri only; no-op on web)
+  useEffect(() => {
+    onMenuEvent(event => {
+      switch (event.type) {
+        case 'about':
+          setIsAboutOpen(true);
+          break;
+        case 'shortcuts':
+          setIsShortcutsOpen(true);
+          break;
+        case 'export-zip':
+          handleExportZip();
+          break;
+        case 'import-zip':
+          handleImportZip();
+          break;
+        case 'compile':
+          handleCompile();
+          break;
+        case 'toggle-pdf':
+          setIsTerminalOpen(prev => !prev);
+          break;
+        case 'toggle-ai':
+          setIsAiPanelOpen(prev => !prev);
+          break;
+        case 'edit-undo':
+        case 'edit-redo':
+        case 'edit-cut':
+        case 'edit-copy':
+        case 'edit-paste': {
+          const cmd = event.type.replace('edit-', '');
+          const target = document.activeElement as HTMLElement | null;
+          if (target && (target.isContentEditable || target.tagName === 'TEXTAREA' || target.tagName === 'INPUT')) {
+            document.execCommand(cmd);
+          } else {
+            document.execCommand(cmd === 'undo' ? 'undo' : cmd === 'redo' ? 'redo' : cmd);
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Handle LaTeX Compilation
   const handleCompile = useCallback(async () => {
@@ -547,73 +606,99 @@ export default function App() {
     });
 
     const blob = await zip.generateAsync({ type: 'blob' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `project_serial_${String(project.serialNumber || 1).padStart(2, '0')}_${project.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}.zip`;
-    a.click();
+    const fileName = `project_serial_${String(project.serialNumber || 1).padStart(2, '0')}_${project.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}.zip`;
+
+    if (isTauri()) {
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      let binary = '';
+      bytes.forEach(b => {
+        binary += String.fromCharCode(b);
+      });
+      const dataBase64 = btoa(binary);
+      const saved = await pickExportZip(dataBase64, fileName);
+      if (!saved) return;
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+    }
   };
 
   // Import Overleaf / LaTeX ZIP Archive
   const handleImportZip = async () => {
+    if (isTauri()) {
+      const picked = await pickImportZip();
+      if (!picked) return;
+      const binary = atob(picked.dataBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      await importZipContent(bytes, picked.name.replace('.zip', ''));
+      return;
+    }
+
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.zip';
     input.onchange = async e => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
-
-      const zip = await JSZip.loadAsync(file);
-      const importedFiles: ProjectFile[] = [];
-
-      for (const [relativePath, zipEntry] of Object.entries(zip.files)) {
-        if (!zipEntry.dir) {
-          const content = await zipEntry.async('string');
-          let type: ProjectFile['type'] = 'TEX';
-          if (relativePath.endsWith('.bib')) type = 'BIB';
-          else if (relativePath.endsWith('.cls')) type = 'CLS';
-          else if (relativePath.endsWith('.sty')) type = 'STY';
-
-          importedFiles.push({
-            id: `file-${Date.now()}-${Math.random()}`,
-            projectId: project.id,
-            path: relativePath,
-            type,
-            content,
-            sizeBytes: content.length,
-            updatedAt: new Date().toISOString(),
-          });
-        }
-      }
-
-      if (importedFiles.length > 0) {
-        const nextSerial = projectsList.length + 1;
-        const main = importedFiles.find(f => f.path.includes('main.tex'))?.path || importedFiles[0].path;
-        const importedProject: Project = {
-          id: `project-import-${Date.now()}`,
-          serialNumber: nextSerial,
-          name: file.name.replace('.zip', ''),
-          description: 'Imported LaTeX ZIP project.',
-          ownerId: 'user-1',
-          ownerName: currentUser ? currentUser.name : 'Author',
-          compiler: 'PDFLATEX',
-          bibTool: 'BIBTEX',
-          mainFile: main,
-          autoCompile: true,
-          isPublic: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          files: importedFiles,
-        };
-
-        setProjectsList(prev => [importedProject, ...prev]);
-        setProject(importedProject);
-        setActiveFilePath(main);
-        setCurrentView('workspace');
-        setTimeout(() => handleCompile(), 100);
-      }
+      await importZipContent(await file.arrayBuffer(), file.name.replace('.zip', ''));
     };
     input.click();
+  };
+
+  const importZipContent = async (data: ArrayBuffer | Uint8Array, projectName: string) => {
+    const zip = await JSZip.loadAsync(data);
+    const importedFiles: ProjectFile[] = [];
+
+    for (const [relativePath, zipEntry] of Object.entries(zip.files)) {
+      if (!zipEntry.dir) {
+        const content = await zipEntry.async('string');
+        let type: ProjectFile['type'] = 'TEX';
+        if (relativePath.endsWith('.bib')) type = 'BIB';
+        else if (relativePath.endsWith('.cls')) type = 'CLS';
+        else if (relativePath.endsWith('.sty')) type = 'STY';
+
+        importedFiles.push({
+          id: `file-${Date.now()}-${Math.random()}`,
+          projectId: project.id,
+          path: relativePath,
+          type,
+          content,
+          sizeBytes: content.length,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    }
+
+    if (importedFiles.length > 0) {
+      const nextSerial = projectsList.length + 1;
+      const main = importedFiles.find(f => f.path.includes('main.tex'))?.path || importedFiles[0].path;
+      const importedProject: Project = {
+        id: `project-import-${Date.now()}`,
+        serialNumber: nextSerial,
+        name: projectName,
+        description: 'Imported LaTeX ZIP project.',
+        ownerId: 'user-1',
+        ownerName: currentUser ? currentUser.name : 'Author',
+        compiler: 'PDFLATEX',
+        bibTool: 'BIBTEX',
+        mainFile: main,
+        autoCompile: true,
+        isPublic: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        files: importedFiles,
+      };
+
+      setProjectsList(prev => [importedProject, ...prev]);
+      setProject(importedProject);
+      setActiveFilePath(main);
+      setCurrentView('workspace');
+      setTimeout(() => handleCompile(), 100);
+    }
   };
 
   // Launch Editor with template or project
@@ -980,6 +1065,11 @@ export default function App() {
           <ShortcutsModal
             isOpen={isShortcutsOpen}
             onClose={() => setIsShortcutsOpen(false)}
+          />
+
+          <AboutModal
+            isOpen={isAboutOpen}
+            onClose={() => setIsAboutOpen(false)}
           />
         </div>
       )}

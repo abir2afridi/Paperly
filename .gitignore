@@ -45,6 +45,9 @@ pnpm-debug.log*
 
 docs/
 
+# Tauri desktop build output
+src-tauri/target/
+
 # macOS
 .DS_Store
 
