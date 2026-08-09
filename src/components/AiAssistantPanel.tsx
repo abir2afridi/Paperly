@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Sparkles,
@@ -12,8 +12,14 @@ import {
   ChevronRight,
   Loader2,
   ArrowRight,
+  Send,
 } from 'lucide-react';
 import { CompileDiagnostic, AIProviderConfig } from '../types';
+
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
 
 interface AiAssistantPanelProps {
   isOpen: boolean;
@@ -40,11 +46,58 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiResult, setAiResult] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatSending, setIsChatSending] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, isChatSending]);
 
   if (!isOpen) return null;
 
   const defaultProvider = providers.find(p => p.isDefault) || providers[0];
   const activeProvider = providers.find(p => p.id === selectedProviderId) || defaultProvider;
+
+  const handleSendChat = async () => {
+    const question = chatInput.trim();
+    if (!question || isChatSending) return;
+
+    if (!providers || providers.length === 0) {
+      setErrorMsg('No AI provider configured. Please add an API key in Settings.');
+      return;
+    }
+
+    setChatMessages(prev => [...prev, { role: 'user', content: question }]);
+    setChatInput('');
+    setIsChatSending(true);
+    setErrorMsg(null);
+
+    try {
+      const res = await fetch('/api/ai/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          providerId: activeProvider?.id,
+          prompt: question,
+          context: activeFileContent,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'AI generation failed.');
+      }
+
+      setChatMessages(prev => [...prev, { role: 'assistant', content: data.result }]);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMsg(msg);
+    } finally {
+      setIsChatSending(false);
+    }
+  };
 
   const handleGenerate = async (type: string, customContext?: string) => {
     if (!providers || providers.length === 0) {
@@ -298,6 +351,73 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
             </div>
           </div>
         )}
+
+        {/* Chat Conversation Thread */}
+        {chatMessages.length > 0 && (
+          <div className="space-y-2 border-t-2 border-slate-200 pt-3">
+            <div className="flex items-center justify-between">
+              <span className="font-black text-[#D11111] uppercase tracking-widest text-[10px]">Chat</span>
+              <button
+                onClick={() => setChatMessages([])}
+                className="text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:text-[#D11111]"
+              >
+                Clear
+              </button>
+            </div>
+
+            {chatMessages.map((m, i) =>
+              m.role === 'user' ? (
+                <div key={i} className="flex justify-end">
+                  <div className="max-w-[85%] bg-[#D11111] text-white p-2.5 rounded-bl-xl rounded-tl-xl rounded-tr-md whitespace-pre-wrap leading-relaxed font-sans">
+                    {m.content}
+                  </div>
+                </div>
+              ) : (
+                <div key={i} className="flex justify-start">
+                  <div className="max-w-[92%] bg-slate-900 text-slate-100 p-2.5 rounded-br-xl rounded-tr-xl rounded-tl-md font-mono text-[11px] whitespace-pre-wrap leading-relaxed border-2 border-slate-800">
+                    {m.content}
+                  </div>
+                </div>
+              )
+            )}
+
+            {isChatSending && (
+              <div className="flex justify-start">
+                <div className="max-w-[92%] bg-slate-900 text-slate-400 p-2.5 rounded-br-xl rounded-tr-xl rounded-tl-md font-mono text-[11px] border-2 border-slate-800 flex items-center space-x-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Thinking...</span>
+                </div>
+              </div>
+            )}
+
+            <div ref={chatEndRef} />
+          </div>
+        )}
+      </div>
+
+      {/* Chat Input */}
+      <div className="p-3 border-t-2 border-slate-200 bg-slate-50">
+        <textarea
+          value={chatInput}
+          onChange={e => setChatInput(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSendChat();
+            }
+          }}
+          rows={2}
+          placeholder="Ask TeXForge AI anything about your document..."
+          className="w-full bg-white border-2 border-slate-300 p-2 text-slate-900 focus:outline-hidden focus:border-[#D11111] font-mono text-xs resize-none"
+        />
+        <button
+          onClick={handleSendChat}
+          disabled={!chatInput.trim() || isChatSending}
+          className="mt-2 w-full py-2 bg-[#D11111] text-white font-black uppercase tracking-widest hover:bg-black disabled:opacity-50 flex items-center justify-center space-x-1.5 transition-colors border border-red-700"
+        >
+          {isChatSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+          <span>Send Message</span>
+        </button>
       </div>
 
       {/* Footer Disclaimer */}

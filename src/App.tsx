@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import JSZip from 'jszip';
 import { Code, Eye } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
-import { MonacoEditor } from './components/MonacoEditor';
+import { MonacoEditor, MonacoEditorApi } from './components/MonacoEditor';
+import { TerminalPanel } from './components/TerminalPanel';
 import { VisualRichTextEditor } from './components/VisualRichTextEditor';
 import { PdfViewer } from './components/PdfViewer';
 import { MathPalette } from './components/MathPalette';
@@ -213,6 +214,35 @@ export default function App() {
   const [isCompiling, setIsCompiling] = useState<boolean>(false);
   const [compilationResult, setCompilationResult] = useState<CompilationResult | null>(null);
 
+  // Editor Mode State (Code vs Visual AST)
+  const [editorMode, setEditorMode] = useState<'code' | 'visual'>('code');
+
+  // Terminal / Diagnostic Log Panel State
+  const [isTerminalOpen, setIsTerminalOpen] = useState<boolean>(false);
+  const editorApiRef = useRef<MonacoEditorApi | null>(null);
+
+  // Auto-expand the terminal panel when a compile produces errors
+  useEffect(() => {
+    if (compilationResult && compilationResult.diagnostics.some(d => d.severity === 'error')) {
+      setIsTerminalOpen(true);
+    }
+  }, [compilationResult]);
+
+  // Jump the Monaco editor to a specific file + line from the diagnostics panel
+  const handleJumpToLine = useCallback(
+    (file: string, line: number) => {
+      if (file && file !== activeFilePath) {
+        setActiveFilePath(file);
+      }
+      if (editorMode !== 'code') {
+        setEditorMode('code');
+      }
+      // Give the editor a moment to mount/switch before jumping
+      setTimeout(() => editorApiRef.current?.jumpToLine(line), 80);
+    },
+    [activeFilePath, editorMode]
+  );
+
   // AI Providers State
   const [providers, setProviders] = useState<AIProviderConfig[]>([]);
 
@@ -251,9 +281,6 @@ export default function App() {
       ],
     },
   ]);
-
-  // Editor Mode State (Code vs Visual AST)
-  const [editorMode, setEditorMode] = useState<'code' | 'visual'>('code');
 
   // Panels & Modals Toggles
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
@@ -847,6 +874,8 @@ export default function App() {
                     diagnostics={compilationResult?.diagnostics || []}
                     monacoThemeId={activeTheme.monacoThemeId}
                     codeThemeId={activeCodeThemeId}
+                    apiRef={editorApiRef}
+                    onCompileRequest={handleCompile}
                   />
                 ) : (
                   <VisualRichTextEditor
@@ -897,6 +926,15 @@ export default function App() {
               activities={activityEvents}
             />
           </div>
+
+          {/* Terminal / Diagnostic Log Panel */}
+          <TerminalPanel
+            result={compilationResult}
+            isOpen={isTerminalOpen}
+            onToggle={() => setIsTerminalOpen(prev => !prev)}
+            activeFilePath={activeFilePath}
+            onJumpToLine={handleJumpToLine}
+          />
 
           {/* Modals & Dialog Windows */}
           <MathPalette

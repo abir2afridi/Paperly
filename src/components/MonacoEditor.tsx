@@ -3,6 +3,10 @@ import Editor, { OnMount, BeforeMount, Monaco } from '@monaco-editor/react';
 import { BibEntry, CompileDiagnostic } from '../types';
 import { CODE_THEMES, CodeThemeId } from '../services/codeThemeService';
 
+export interface MonacoEditorApi {
+  jumpToLine: (line: number) => void;
+}
+
 interface MonacoEditorProps {
   content: string;
   onChange: (value: string) => void;
@@ -12,6 +16,8 @@ interface MonacoEditorProps {
   onCursorPositionChange?: (line: number) => void;
   monacoThemeId?: string;
   codeThemeId?: CodeThemeId;
+  apiRef?: React.MutableRefObject<MonacoEditorApi | null>;
+  onCompileRequest?: () => void;
 }
 
 export const MonacoEditor: React.FC<MonacoEditorProps> = ({
@@ -23,9 +29,17 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
   onCursorPositionChange,
   monacoThemeId = 'overleaf-light-theme',
   codeThemeId = 'match-theme',
+  apiRef,
+  onCompileRequest,
 }) => {
   const editorRef = useRef<unknown>(null);
   const monacoRef = useRef<Monaco | null>(null);
+  // Keep the latest compile callback so the Monaco Ctrl+Enter binding never
+  // captures a stale closure (the editor instance survives prop re-renders).
+  const onCompileRequestRef = useRef(onCompileRequest);
+  useEffect(() => {
+    onCompileRequestRef.current = onCompileRequest;
+  }, [onCompileRequest]);
 
   // 'match-theme' follows the workspace theme; any other selection uses a
   // fixed VS Code-style palette that is independent of the workspace theme.
@@ -344,6 +358,23 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     editorRef.current = editor;
     monacoRef.current = monaco;
 
+    // Expose imperative API for external line jumps (Terminal / Diagnostics panel)
+    if (apiRef) {
+      apiRef.current = {
+        jumpToLine: (line: number) => {
+          const current = editorRef.current as {
+            revealLineInCenter: (l: number) => void;
+            setPosition: (p: { lineNumber: number; column: number }) => void;
+            focus: () => void;
+          } | null;
+          if (!current) return;
+          current.revealLineInCenter(line);
+          current.setPosition({ lineNumber: line, column: 1 });
+          current.focus();
+        },
+      };
+    }
+
     // Ensure the current theme is applied once the editor exists
     monaco.editor.setTheme(effectiveMonacoThemeId);
 
@@ -353,7 +384,23 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
         onCursorPositionChange(e.position.lineNumber);
       }
     });
+
+    // Ctrl/Cmd + Enter -> Compile. Monaco swallows the default browser
+    // shortcut (its own binding is "insert line below"), so register it
+    // explicitly to keep the TeXForge compile shortcut working in-editor.
+    if (onCompileRequestRef.current) {
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+        onCompileRequestRef.current?.();
+      });
+    }
   };
+
+  // Clear the exposed API when the editor unmounts (e.g. switching to Visual mode)
+  useEffect(() => {
+    return () => {
+      if (apiRef) apiRef.current = null;
+    };
+  }, [apiRef]);
 
   // Update diagnostic markers in editor when compile completes
   useEffect(() => {
