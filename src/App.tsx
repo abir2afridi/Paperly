@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import JSZip from 'jszip';
-import { Code, Eye } from 'lucide-react';
+import { Code, Eye, PanelRight, PanelRightClose } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { MonacoEditor, MonacoEditorApi } from './components/MonacoEditor';
@@ -228,6 +228,7 @@ export default function App() {
 
   // Terminal / Diagnostic Log Panel State
   const [isTerminalOpen, setIsTerminalOpen] = useState<boolean>(false);
+  const [isTerminalMaximized, setIsTerminalMaximized] = useState(false);
   const editorApiRef = useRef<MonacoEditorApi | null>(null);
 
   // Auto-expand the terminal panel when a compile produces errors
@@ -301,6 +302,42 @@ export default function App() {
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+
+  // Responsive layout: collapsed sidebar + PDF panel visibility
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('texforge.sidebarCollapsed');
+      if (saved !== null) return saved === 'true';
+    } catch {
+      /* ignore */
+    }
+    return window.innerWidth < 1200;
+  });
+  const [isPdfPanelOpen, setIsPdfPanelOpen] = useState<boolean>(() => window.innerWidth >= 1200);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('texforge.sidebarCollapsed', String(isSidebarCollapsed));
+    } catch {
+      /* ignore */
+    }
+  }, [isSidebarCollapsed]);
+
+  // Auto-collapse sidebar + hide PDF preview on narrow windows
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1199px)');
+    const handleChange = (e: MediaQueryList | MediaQueryListEvent) => {
+      if (e.matches) {
+        setIsSidebarCollapsed(true);
+        setIsPdfPanelOpen(false);
+      } else {
+        setIsPdfPanelOpen(true);
+      }
+    };
+    handleChange(mq);
+    mq.addEventListener('change', handleChange);
+    return () => mq.removeEventListener('change', handleChange);
+  }, []);
 
   // Active File object
   const activeFile = project.files.find(f => f.path === activeFilePath) || project.files[0];
@@ -453,6 +490,16 @@ export default function App() {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
         e.preventDefault();
         setIsChatPanelOpen(prev => !prev);
+      }
+      // Cmd/Ctrl + B -> Toggle Sidebar
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setIsSidebarCollapsed(prev => !prev);
+      }
+      // Cmd/Ctrl + J -> Toggle Terminal Panel (VS Code style)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        setIsTerminalOpen(prev => !prev);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -901,7 +948,11 @@ export default function App() {
           />
 
           {/* Main Split Workspace */}
-          <div className="flex-1 flex overflow-hidden relative">
+          <div
+            className={`${
+              isTerminalMaximized ? 'hidden' : 'flex-1'
+            } flex overflow-hidden relative`}
+          >
             {/* Left Sidebar File Explorer */}
             <Sidebar
               files={project.files}
@@ -913,10 +964,12 @@ export default function App() {
               onRenameFile={handleRenameFile}
               onDeleteFile={handleDeleteFile}
               onFileUpload={() => {}}
+              collapsed={isSidebarCollapsed}
+              onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
             />
 
             {/* Center Monaco LaTeX Editor / Visual Rich Text Editor */}
-            <main className="flex-1 h-full relative overflow-hidden bg-white flex flex-col">
+            <main className="flex-1 min-w-0 h-full relative overflow-hidden bg-white flex flex-col">
               {/* Editor Sub-header Mode Switcher & Workspace Theme Selector */}
               <div className="h-8 bg-slate-100 border-b-2 border-slate-200 flex items-center justify-between px-3 text-[10px] font-bold select-none">
                 <div className="flex items-center space-x-1">
@@ -944,8 +997,20 @@ export default function App() {
                   </button>
                 </div>
 
-                <div className="flex items-center space-x-3 font-mono text-slate-500 font-normal">
-                  <span>{activeFilePath}</span>
+                <div className="flex items-center space-x-2 font-mono text-slate-500 font-normal">
+                  <span className="hidden sm:inline truncate">{activeFilePath}</span>
+                  <div className="hidden sm:block h-3.5 w-px bg-slate-300" />
+                  <button
+                    onClick={() => setIsPdfPanelOpen(prev => !prev)}
+                    className={`p-1 border transition-colors ${
+                      isPdfPanelOpen
+                        ? 'text-[#D11111] border-red-200 bg-red-50'
+                        : 'text-slate-500 border-slate-300 hover:text-[#D11111] hover:bg-red-50'
+                    }`}
+                    title={isPdfPanelOpen ? 'Hide PDF Preview' : 'Show PDF Preview'}
+                  >
+                    {isPdfPanelOpen ? <PanelRightClose className="w-3.5 h-3.5" /> : <PanelRight className="w-3.5 h-3.5" />}
+                  </button>
                 </div>
               </div>
 
@@ -973,7 +1038,7 @@ export default function App() {
             </main>
 
             {/* Right PDF.js Interactive Preview Panel */}
-            <section className="w-1/2 h-full relative">
+            <section className={`${isPdfPanelOpen ? 'flex' : 'hidden'} w-1/2 min-w-80 h-full relative shrink-0`}>
               <PdfViewer
                 pdfDataUrl={compilationResult?.pdfDataUrl || null}
                 annotations={annotations}
@@ -1016,7 +1081,12 @@ export default function App() {
           <TerminalPanel
             result={compilationResult}
             isOpen={isTerminalOpen}
-            onToggle={() => setIsTerminalOpen(prev => !prev)}
+            onToggle={() => {
+              if (isTerminalOpen) setIsTerminalMaximized(false);
+              setIsTerminalOpen(prev => !prev);
+            }}
+            isMaximized={isTerminalMaximized}
+            onToggleMaximize={() => setIsTerminalMaximized(prev => !prev)}
             activeFilePath={activeFilePath}
             onJumpToLine={handleJumpToLine}
           />

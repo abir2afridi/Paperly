@@ -22,5 +22,13 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "public/vendor",
+    "src-tauri/target",
+    "src-tauri/gen",
+    "server.js"
+  ]
 }

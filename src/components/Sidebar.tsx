@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FileText,
   MessageSquare,
@@ -28,7 +28,13 @@ import {
   Sparkles,
   RefreshCw,
   FolderPlus,
+  Folder,
+  FolderOpen,
+  FolderMinus,
+  ChevronRight,
   ChevronDown,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 
 import {
@@ -58,6 +64,10 @@ interface SidebarProps {
   onRenameFile: (oldPath: string, newPath: string) => void;
   onDeleteFile: (path: string) => void;
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+
+  // Sidebar collapse / expand
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 
   // Module 2: Comments
   comments?: CodeComment[];
@@ -96,6 +106,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onDeleteFile,
   onFileUpload,
 
+  collapsed = false,
+  onToggleCollapse,
+
   comments: propComments,
   onAddComment,
   onToggleResolveComment,
@@ -118,6 +131,55 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<SidebarTab>('files');
 
+  // Drag-to-resize sidebar width (VS Code style), persisted locally
+  const [asideWidth, setAsideWidth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('texforge.sidebarWidth');
+      const w = saved ? parseInt(saved, 10) : 272;
+      return Number.isFinite(w) ? Math.min(420, Math.max(176, w)) : 272;
+    } catch {
+      return 272;
+    }
+  });
+  const dragRef = useRef<{ startX: number; startW: number } | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('texforge.sidebarWidth', String(asideWidth));
+    } catch {
+      /* ignore */
+    }
+  }, [asideWidth]);
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    dragRef.current = { startX: e.clientX, startW: asideWidth };
+
+    const onMove = (ev: MouseEvent) => {
+      if (!dragRef.current) return;
+      const w = Math.min(420, Math.max(176, dragRef.current.startW + (ev.clientX - dragRef.current.startX)));
+      setAsideWidth(w);
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
+  // Collapsed mode: clicking a tab icon expands the panel and switches to it
+  const openTab = (tab: SidebarTab) => {
+    if (collapsed && onToggleCollapse) onToggleCollapse();
+    setActiveTab(tab);
+  };
+
   // --- Module 1: File Explorer Local State ---
   const [isCreatingFile, setIsCreatingFile] = useState(false);
   const [newFileName, setNewFileName] = useState('');
@@ -125,6 +187,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [renameInput, setRenameInput] = useState('');
   const [activeMenuPath, setActiveMenuPath] = useState<string | null>(null);
   const [fileSearchQuery, setFileSearchQuery] = useState('');
+  const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(new Set());
+
+  const toggleDir = (dir: string) => {
+    setCollapsedDirs(prev => {
+      const next = new Set(prev);
+      if (next.has(dir)) next.delete(dir);
+      else next.add(dir);
+      return next;
+    });
+  };
 
   // --- Module 2: Comments Local State ---
   const [localComments, setLocalComments] = useState<CodeComment[]>([
@@ -413,15 +485,143 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return <FileText className="w-4 h-4 text-slate-500" />;
   };
 
+  // Group files into folders for a VS Code-style collapsible tree.
+  // While searching, fall back to a flat filtered list.
+  const searchQuery = fileSearchQuery.trim().toLowerCase();
+  const fileTree = useMemo(() => {
+    const filtered = files.filter(f => f.path.toLowerCase().includes(searchQuery));
+    if (searchQuery) {
+      return { searching: true, roots: filtered, dirs: [] as { name: string; files: ProjectFile[] }[] };
+    }
+    const roots: ProjectFile[] = [];
+    const dirMap = new Map<string, ProjectFile[]>();
+    for (const f of filtered) {
+      const slash = f.path.lastIndexOf('/');
+      if (slash === -1) {
+        roots.push(f);
+      } else {
+        const dir = f.path.slice(0, slash);
+        const arr = dirMap.get(dir) ?? [];
+        arr.push(f);
+        dirMap.set(dir, arr);
+      }
+    }
+    return { searching: false, roots, dirs: [...dirMap.entries()].map(([name, fs]) => ({ name, files: fs })) };
+  }, [files, searchQuery]);
+
+  const renderFileRow = (file: ProjectFile) => {
+    const isActive = file.path === activeFilePath;
+    const isMain = file.path === mainFilePath;
+    const isRenaming = renamingPath === file.path;
+
+    return (
+      <div
+        key={file.id}
+        className={`group relative flex items-center justify-between px-2.5 py-1.5 cursor-pointer transition-all border ${
+          isActive
+            ? 'bg-red-50 text-[#D11111] font-bold border-[#D11111] shadow-2xs'
+            : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800'
+        }`}
+        onClick={() => onSelectFile(file.path)}
+      >
+        <div className="flex items-center space-x-2 truncate pr-2">
+          {getFileIcon(file)}
+
+          {isRenaming ? (
+            <input
+              type="text"
+              value={renameInput}
+              onChange={e => setRenameInput(e.target.value)}
+              onBlur={() => handleRenameSubmit(file.path)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleRenameSubmit(file.path);
+                if (e.key === 'Escape') setRenamingPath(null);
+              }}
+              autoFocus
+              className="bg-white border-2 border-[#D11111] px-1 text-xs text-slate-900 focus:outline-none"
+            />
+          ) : (
+            <span className="truncate font-mono text-[11px]">{file.path}</span>
+          )}
+        </div>
+
+        <div className="flex items-center space-x-1">
+          {isMain && (
+            <span
+              className="text-[8px] bg-[#D11111] text-white font-black px-1.5 py-0.5 uppercase tracking-widest"
+              title="Main Entry File"
+            >
+              Main
+            </span>
+          )}
+
+          <button
+            type="button"
+            onClick={e => {
+              e.stopPropagation();
+              setActiveMenuPath(activeMenuPath === file.path ? null : file.path);
+            }}
+            className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-slate-200 text-slate-500"
+          >
+            <MoreVertical className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {activeMenuPath === file.path && (
+          <div
+            className="absolute right-2 top-8 bg-white border-2 border-slate-800 shadow-xl py-1 z-30 w-38 text-slate-800 text-[11px]"
+            onClick={e => e.stopPropagation()}
+          >
+            {!isMain && file.path.endsWith('.tex') && (
+              <button
+                onClick={() => {
+                  onSetMainFile(file.path);
+                  setActiveMenuPath(null);
+                }}
+                className="w-full text-left px-2.5 py-1.5 hover:bg-red-50 hover:text-[#D11111] font-bold flex items-center space-x-1.5"
+              >
+                <CheckCircle2 className="w-3 h-3 text-[#D11111]" />
+                <span>Set as Main File</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                setRenamingPath(file.path);
+                setRenameInput(file.path);
+                setActiveMenuPath(null);
+              }}
+              className="w-full text-left px-2.5 py-1.5 hover:bg-slate-100 flex items-center space-x-1.5"
+            >
+              <Edit2 className="w-3 h-3 text-slate-500" />
+              <span>Rename</span>
+            </button>
+
+            <button
+              onClick={() => {
+                onDeleteFile(file.path);
+                setActiveMenuPath(null);
+              }}
+              className="w-full text-left px-2.5 py-1.5 hover:bg-red-50 text-[#D11111] font-bold flex items-center space-x-1.5"
+            >
+              <Trash2 className="w-3 h-3 text-[#D11111]" />
+              <span>Delete</span>
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const unresolvedCommentsCount = commentsList.filter(c => !c.resolved).length;
 
   return (
-    <div className="flex h-full select-none text-xs font-medium border-r-2 border-slate-200 bg-white">
+    <div className="flex h-full select-none text-xs font-medium bg-white">
       {/* LEFT ICON NAVIGATION RAIL */}
       <nav className="w-13 bg-slate-950 text-slate-400 flex flex-col items-center py-3 border-r border-slate-800 space-y-4">
         {/* 1. File Explorer */}
         <button
-          onClick={() => setActiveTab('files')}
+          onClick={() => openTab('files')}
           className={`p-2.5 rounded-lg transition-all relative group ${
             activeTab === 'files'
               ? 'bg-[#D11111] text-white shadow-lg'
@@ -437,7 +637,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* 2. Review Comments */}
         <button
-          onClick={() => setActiveTab('comments')}
+          onClick={() => openTab('comments')}
           className={`p-2.5 rounded-lg transition-all relative group ${
             activeTab === 'comments'
               ? 'bg-[#D11111] text-white shadow-lg'
@@ -458,7 +658,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* 3. Team Chat */}
         <button
-          onClick={() => setActiveTab('chat')}
+          onClick={() => openTab('chat')}
           className={`p-2.5 rounded-lg transition-all relative group ${
             activeTab === 'chat'
               ? 'bg-[#D11111] text-white shadow-lg'
@@ -474,7 +674,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* 4. Activity Audit Log */}
         <button
-          onClick={() => setActiveTab('activity')}
+          onClick={() => openTab('activity')}
           className={`p-2.5 rounded-lg transition-all relative group ${
             activeTab === 'activity'
               ? 'bg-[#D11111] text-white shadow-lg'
@@ -490,7 +690,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* 5. GitHub Integration */}
         <button
-          onClick={() => setActiveTab('github')}
+          onClick={() => openTab('github')}
           className={`p-2.5 rounded-lg transition-all relative group ${
             activeTab === 'github'
               ? 'bg-[#D11111] text-white shadow-lg'
@@ -509,7 +709,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* 6. Version History */}
         <button
-          onClick={() => setActiveTab('history')}
+          onClick={() => openTab('history')}
           className={`p-2.5 rounded-lg transition-all relative group ${
             activeTab === 'history'
               ? 'bg-[#D11111] text-white shadow-lg'
@@ -522,10 +722,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
             Version Snapshots ({snapshotsList.length})
           </span>
         </button>
+
+        {/* Sidebar Collapse / Expand Toggle */}
+        <button
+          onClick={onToggleCollapse}
+          className="mt-auto p-2.5 rounded-lg transition-all hover:bg-slate-800 hover:text-white"
+          title={collapsed ? 'Expand Sidebar (Ctrl+B)' : 'Collapse Sidebar (Ctrl+B)'}
+        >
+          {collapsed ? <ChevronsRight className="w-5 h-5" /> : <ChevronsLeft className="w-5 h-5" />}
+        </button>
       </nav>
 
       {/* MAIN SIDEBAR CONTENT PANEL */}
-      <aside className="w-68 bg-slate-50 flex flex-col h-full overflow-hidden text-slate-800">
+      <aside
+        style={collapsed ? undefined : { width: asideWidth }}
+        className={`${collapsed ? 'hidden' : 'flex'} bg-slate-50 flex-col h-full overflow-hidden text-slate-800`}
+      >
         {/* MODULE 1: FILE EXPLORER */}
         {activeTab === 'files' && (
           <div className="flex flex-col h-full">
@@ -536,6 +748,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </span>
 
               <div className="flex items-center space-x-1">
+                <button
+                  onClick={() => setCollapsedDirs(new Set(fileTree.dirs.map(d => d.name)))}
+                  disabled={fileTree.dirs.length === 0}
+                  className="p-1 text-slate-700 hover:text-white hover:bg-[#D11111] transition-colors border border-slate-200 hover:border-red-700 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-700 disabled:hover:border-slate-200"
+                  title="Collapse All Folders"
+                >
+                  <FolderMinus className="w-3.5 h-3.5" />
+                </button>
+
+                <button
+                  onClick={() => setCollapsedDirs(new Set())}
+                  disabled={fileTree.dirs.length === 0}
+                  className="p-1 text-slate-700 hover:text-white hover:bg-[#D11111] transition-colors border border-slate-200 hover:border-red-700 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-700 disabled:hover:border-slate-200"
+                  title="Expand All Folders"
+                >
+                  <FolderPlus className="w-3.5 h-3.5" />
+                </button>
+
                 <button
                   onClick={() => setIsCreatingFile(true)}
                   className="p-1 text-slate-700 hover:text-white hover:bg-[#D11111] transition-colors border border-slate-200 hover:border-red-700"
@@ -605,111 +835,57 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             {/* File Tree List */}
             <div className="flex-1 overflow-y-auto p-2 space-y-1">
-              {files
-                .filter(f => f.path.toLowerCase().includes(fileSearchQuery.toLowerCase()))
-                .map(file => {
-                  const isActive = file.path === activeFilePath;
-                  const isMain = file.path === mainFilePath;
-                  const isRenaming = renamingPath === file.path;
+              {fileTree.searching && fileTree.roots.map(renderFileRow)}
 
-                  return (
-                    <div
-                      key={file.id}
-                      className={`group relative flex items-center justify-between px-2.5 py-1.5 cursor-pointer transition-all border ${
-                        isActive
-                          ? 'bg-red-50 text-[#D11111] font-bold border-[#D11111] shadow-2xs'
-                          : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800'
-                      }`}
-                      onClick={() => onSelectFile(file.path)}
-                    >
-                      <div className="flex items-center space-x-2 truncate pr-2">
-                        {getFileIcon(file)}
+              {!fileTree.searching && (
+                <>
+                  {fileTree.roots.map(renderFileRow)}
 
-                        {isRenaming ? (
-                          <input
-                            type="text"
-                            value={renameInput}
-                            onChange={e => setRenameInput(e.target.value)}
-                            onBlur={() => handleRenameSubmit(file.path)}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') handleRenameSubmit(file.path);
-                              if (e.key === 'Escape') setRenamingPath(null);
-                            }}
-                            autoFocus
-                            className="bg-white border-2 border-[#D11111] px-1 text-xs text-slate-900 focus:outline-none"
-                          />
-                        ) : (
-                          <span className="truncate font-mono text-[11px]">{file.path}</span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center space-x-1">
-                        {isMain && (
-                          <span
-                            className="text-[8px] bg-[#D11111] text-white font-black px-1.5 py-0.5 uppercase tracking-widest"
-                            title="Main Entry File"
-                          >
-                            Main
-                          </span>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={e => {
-                            e.stopPropagation();
-                            setActiveMenuPath(activeMenuPath === file.path ? null : file.path);
-                          }}
-                          className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-slate-200 text-slate-500"
-                        >
-                          <MoreVertical className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                      {activeMenuPath === file.path && (
+                  {fileTree.dirs.map(dir => {
+                    const isCollapsed = collapsedDirs.has(dir.name);
+                    return (
+                      <div key={dir.name}>
                         <div
-                          className="absolute right-2 top-8 bg-white border-2 border-slate-800 shadow-xl py-1 z-30 w-38 text-slate-800 text-[11px]"
-                          onClick={e => e.stopPropagation()}
+                          className="flex items-center space-x-1 px-1.5 py-1 cursor-pointer select-none border border-transparent hover:bg-slate-100 transition-colors"
+                          onClick={() => toggleDir(dir.name)}
+                          title={isCollapsed ? `Expand ${dir.name}` : `Collapse ${dir.name}`}
                         >
-                          {!isMain && file.path.endsWith('.tex') && (
-                            <button
-                              onClick={() => {
-                                onSetMainFile(file.path);
-                                setActiveMenuPath(null);
-                              }}
-                              className="w-full text-left px-2.5 py-1.5 hover:bg-red-50 hover:text-[#D11111] font-bold flex items-center space-x-1.5"
-                            >
-                              <CheckCircle2 className="w-3 h-3 text-[#D11111]" />
-                              <span>Set as Main File</span>
-                            </button>
+                          {isCollapsed ? (
+                            <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          ) : (
+                            <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                           )}
-
-                          <button
-                            onClick={() => {
-                              setRenamingPath(file.path);
-                              setRenameInput(file.path);
-                              setActiveMenuPath(null);
-                            }}
-                            className="w-full text-left px-2.5 py-1.5 hover:bg-slate-100 flex items-center space-x-1.5"
-                          >
-                            <Edit2 className="w-3 h-3 text-slate-500" />
-                            <span>Rename</span>
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              onDeleteFile(file.path);
-                              setActiveMenuPath(null);
-                            }}
-                            className="w-full text-left px-2.5 py-1.5 hover:bg-red-50 text-[#D11111] font-bold flex items-center space-x-1.5"
-                          >
-                            <Trash2 className="w-3 h-3 text-[#D11111]" />
-                            <span>Delete</span>
-                          </button>
+                          {isCollapsed ? (
+                            <Folder className="w-4 h-4 text-amber-500 shrink-0" />
+                          ) : (
+                            <FolderOpen className="w-4 h-4 text-amber-500 shrink-0" />
+                          )}
+                          <span className="truncate font-mono text-[11px] font-bold text-slate-700">
+                            {dir.name}
+                          </span>
+                          <span className="text-[9px] font-mono text-slate-400 shrink-0">
+                            {dir.files.length}
+                          </span>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
+
+                        {!isCollapsed && (
+                          <div className="ml-4 border-l border-slate-200 pl-1.5 space-y-1">
+                            {dir.files.map(renderFileRow)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+
+              {fileTree.roots.length === 0 &&
+                fileTree.dirs.length === 0 &&
+                !fileTree.searching && (
+                  <div className="text-center text-[11px] text-slate-400 font-mono py-6 uppercase tracking-wider">
+                    No files yet — create one above.
+                  </div>
+                )}
             </div>
           </div>
         )}
@@ -1212,6 +1388,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
       </aside>
+
+      {/* Drag-to-resize handle (VS Code style) */}
+      {!collapsed && (
+        <div
+          onMouseDown={handleResizeStart}
+          className="w-1.5 cursor-col-resize shrink-0 border-l border-slate-200 hover:bg-[#D11111]/40 active:bg-[#D11111] transition-colors"
+          title="Drag to resize sidebar"
+        />
+      )}
     </div>
   );
 };

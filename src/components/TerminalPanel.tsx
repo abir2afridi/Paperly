@@ -12,6 +12,8 @@ import {
   ScrollText,
   ListFilter,
   Layers,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { CompilationResult, CompileDiagnostic } from '../types';
 
@@ -21,6 +23,8 @@ interface TerminalPanelProps {
   result: CompilationResult | null;
   isOpen: boolean;
   onToggle: () => void;
+  isMaximized?: boolean;
+  onToggleMaximize?: () => void;
   activeFilePath: string;
   onJumpToLine: (file: string, line: number) => void;
 }
@@ -41,6 +45,8 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
   result,
   isOpen,
   onToggle,
+  isMaximized = false,
+  onToggleMaximize,
   activeFilePath,
   onJumpToLine,
 }) => {
@@ -86,7 +92,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
   );
 
   return (
-    <div className="border-t-2 border-slate-200 bg-white flex flex-col shrink-0 select-none">
+    <div className={`border-t-2 border-slate-200 bg-white flex flex-col shrink-0 select-none ${isMaximized ? 'flex-1 min-h-0' : ''}`}>
       {/* Header Summary Banner */}
       <div className="h-9 bg-slate-100 border-b border-slate-200 flex items-center justify-between px-3">
         <div className="flex items-center space-x-3">
@@ -142,13 +148,25 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
           )}
         </div>
 
-        <button
-          onClick={onToggle}
-          className="p-1 text-slate-500 hover:text-[#D11111] hover:bg-red-50 transition-colors"
-          title={isOpen ? 'Collapse Terminal' : 'Expand Terminal'}
-        >
-          {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
-        </button>
+        <div className="flex items-center space-x-1">
+          {onToggleMaximize && (
+            <button
+              onClick={onToggleMaximize}
+              className="p-1 text-slate-500 hover:text-[#D11111] hover:bg-red-50 transition-colors"
+              title={isMaximized ? 'Restore Terminal (VS Code: Ctrl+Shift+J)' : 'Maximize Terminal (VS Code: Ctrl+Shift+J)'}
+            >
+              {isMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+          )}
+
+          <button
+            onClick={onToggle}
+            className="p-1 text-slate-500 hover:text-[#D11111] hover:bg-red-50 transition-colors"
+            title={isOpen ? 'Collapse Terminal (Ctrl+J)' : 'Expand Terminal (Ctrl+J)'}
+          >
+            {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+          </button>
+        </div>
       </div>
 
       {isOpen && (
@@ -162,7 +180,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
           </div>
 
           {/* Content Area */}
-          <div className="h-44 overflow-y-auto bg-white">
+          <div className={`${isMaximized ? 'flex-1 min-h-0' : 'h-44'} overflow-y-auto bg-white`}>
             {activeTab === 'raw' ? (
               <pre className="p-3 bg-slate-950 text-slate-200 font-mono text-[11px] leading-relaxed whitespace-pre h-full overflow-auto">
                 {result ? result.log : 'No raw log available — run a compile first.'}

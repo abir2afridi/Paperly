@@ -31,7 +31,7 @@ export const ChatAndActivity: React.FC<ChatAndActivityProps> = ({
   };
 
   return (
-    <aside className="w-80 bg-white border-l-2 border-slate-200 flex flex-col h-full z-20 shadow-2xl text-xs">
+    <aside className="absolute inset-y-0 right-0 w-80 max-w-[85vw] bg-white border-l-2 border-slate-200 flex flex-col h-full z-20 shadow-2xl text-xs">
       {/* Header */}
       <div className="p-3 border-b-2 border-red-600 flex items-center justify-between bg-[#D11111] text-white relative overflow-hidden">
         <div className="absolute inset-0 grid-pattern-dark pointer-events-none opacity-20" />
