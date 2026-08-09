@@ -98,6 +98,45 @@ export function onAuthStateChange(callback: (user: AuthSessionUser | null) => vo
   return () => data.subscription.unsubscribe();
 }
 
+// Update the user's display profile (name, role, avatar). Stored in auth metadata so it
+// survives across sessions; the profiles row is kept in sync for dashboard queries.
+export async function updateUserProfile(patch: {
+  displayName?: string;
+  academicRole?: string;
+  avatarUrl?: string | null;
+}) {
+  if (!supabase) return { ok: false as const, error: 'Database is not configured.' };
+  const metadata: Record<string, string> = {};
+  if (patch.displayName !== undefined) metadata.display_name = patch.displayName;
+  if (patch.academicRole !== undefined) metadata.academic_role = patch.academicRole;
+  if (patch.avatarUrl !== undefined) metadata.avatar_url = patch.avatarUrl || '';
+
+  const { data, error } = await supabase.auth.updateUser({ data: metadata });
+  if (error) return { ok: false as const, error: error.message };
+
+  // Best-effort sync of the profiles row; failures are non-fatal (metadata already saved).
+  try {
+    const profile: Record<string, string> = {};
+    if (patch.displayName !== undefined) profile.display_name = patch.displayName;
+    if (patch.academicRole !== undefined) profile.academic_role = patch.academicRole;
+    if (Object.keys(profile).length > 0) {
+      await supabase
+        .from('profiles')
+        .upsert({ id: data.user.id, email: data.user.email ?? '', ...profile }, { onConflict: 'id' });
+    }
+  } catch {
+    // ignore — auth metadata update already succeeded
+  }
+  return { ok: true as const };
+}
+
+export async function changePassword(newPassword: string) {
+  if (!supabase) return { ok: false as const, error: 'Database is not configured.' };
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) return { ok: false as const, error: error.message };
+  return { ok: true as const };
+}
+
 async function getProfile(uid: string): Promise<ProfileRow | null> {
   if (!supabase) return null;
   const { data } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();

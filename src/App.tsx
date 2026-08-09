@@ -1214,6 +1214,7 @@ export default function App() {
             }
           }
           projects={projectsList}
+          isCloudUser={Boolean(currentUser)}
           onOpenProject={proj => handleLaunchEditor(undefined, proj)}
           onCreateNewProject={handleNewProject}
           onDeleteProject={handleDeleteProjectFromDashboard}
@@ -1223,6 +1224,9 @@ export default function App() {
           onLogout={handleLogout}
           onGoHome={() => setCurrentView('landing')}
           onOpenThemeSelector={() => setIsThemeSelectorOpen(true)}
+          onOpenAiSettings={() => setIsSettingsOpen(true)}
+          onOpenAbout={() => setIsAboutOpen(true)}
+          onSelectTheme={setActiveThemeId}
           activeThemeId={activeThemeId}
           activeThemeMode={activeTheme.mode}
           onToggleThemeMode={handleToggleThemeMode}
@@ -1458,15 +1462,6 @@ export default function App() {
             onAppendBibtex={handleAppendBibtex}
           />
 
-          <SettingsModal
-            isOpen={isSettingsOpen}
-            onClose={() => setIsSettingsOpen(false)}
-            providers={providers}
-            onRefreshProviders={refreshProviders}
-            activeThemeId={activeThemeId}
-            onSelectTheme={setActiveThemeId}
-          />
-
           <TemplatesModal
             isOpen={isTemplatesOpen}
             onClose={() => setIsTemplatesOpen(false)}
@@ -1491,6 +1486,16 @@ export default function App() {
           />
         </div>
       )}
+
+      {/* Global Settings Modal (AI Providers + Themes) — shared by workspace & dashboard */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        providers={providers}
+        onRefreshProviders={refreshProviders}
+        activeThemeId={activeThemeId}
+        onSelectTheme={setActiveThemeId}
+      />
 
       {/* Auth Page for Login & Signup */}
       {currentView === 'auth' && (

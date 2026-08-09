@@ -11,27 +11,28 @@ import {
   BookOpen,
   Palette,
   LogOut,
-  User,
   SlidersHorizontal,
   Check,
-  Layers,
   Sparkles,
-  Zap,
-  GraduationCap,
-  ChevronDown,
   Edit2,
   CheckCircle2,
   Sun,
   Moon,
+  LayoutDashboard,
+  FolderOpen,
+  Settings as SettingsIcon,
+  ChevronDown,
 } from 'lucide-react';
 import { Project, Template } from '../types';
 import { STARTER_TEMPLATES } from '../data/templates';
 import { THEMES, ThemeId } from '../services/themeService';
 import { UserAvatar } from './UserAvatar';
+import { DashboardSettings } from './DashboardSettings';
 
 interface DashboardViewProps {
   user: { name: string; email: string; role: string; avatarUrl?: string };
   projects: Project[];
+  isCloudUser: boolean;
   onOpenProject: (project: Project) => void;
   onCreateNewProject: () => void;
   onDeleteProject: (projectId: string) => void;
@@ -41,6 +42,9 @@ interface DashboardViewProps {
   onLogout: () => void;
   onGoHome: () => void;
   onOpenThemeSelector: () => void;
+  onOpenAiSettings: () => void;
+  onOpenAbout: () => void;
+  onSelectTheme: (themeId: ThemeId) => void;
   activeThemeId: ThemeId;
   activeThemeMode: 'light' | 'dark';
   onToggleThemeMode: () => void;
@@ -49,6 +53,7 @@ interface DashboardViewProps {
 export const DashboardView: React.FC<DashboardViewProps> = ({
   user,
   projects,
+  isCloudUser,
   onOpenProject,
   onCreateNewProject,
   onDeleteProject,
@@ -58,14 +63,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onLogout,
   onGoHome,
   onOpenThemeSelector,
+  onOpenAiSettings,
+  onOpenAbout,
+  onSelectTheme,
   activeThemeId,
   activeThemeMode,
   onToggleThemeMode,
 }) => {
+  const [activeSection, setActiveSection] = useState<'overview' | 'projects' | 'templates' | 'settings'>('overview');
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'serial_asc' | 'serial_desc' | 'updated' | 'name'>('serial_asc');
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+
+  const NAV_SECTIONS: { id: 'overview' | 'projects' | 'templates' | 'settings'; label: string; icon: React.ReactNode }[] = [
+    { id: 'overview', label: 'Overview', icon: <LayoutDashboard className="w-4 h-4" /> },
+    { id: 'projects', label: 'Projects', icon: <FolderOpen className="w-4 h-4" /> },
+    { id: 'templates', label: 'Templates', icon: <BookOpen className="w-4 h-4" /> },
+    { id: 'settings', label: 'Settings', icon: <SettingsIcon className="w-4 h-4" /> },
+  ];
 
   const activeThemeObj = THEMES.find(t => t.id === activeThemeId) || THEMES[0];
 
@@ -106,8 +123,146 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     setEditingProjectId(null);
   };
 
+  const renderProjectCard = (proj: Project) => {
+    const serialNumStr = `#${String(proj.serialNumber || 1).padStart(2, '0')}`;
+    const isEditing = editingProjectId === proj.id;
+
+    return (
+      <div
+        key={proj.id}
+        className="bg-paper border border-ink/15 hover:border-ink/40 p-5 transition-all flex flex-col justify-between group relative"
+      >
+        <div>
+          {/* Serial Tag + Compiler Badge */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center space-x-2">
+              <span className="bg-ink text-canvas font-bold font-editorial-mono text-[10px] px-2 py-0.5 uppercase tracking-widest border border-ink">
+                SERIAL {serialNumStr}
+              </span>
+              <span className="border border-ink/20 bg-canvas text-ink-muted-2 font-editorial-mono text-[9px] px-1.5 py-0.5 uppercase">
+                {proj.compiler}
+              </span>
+            </div>
+
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={() => handleStartRename(proj)}
+                className="p-1 text-ink-muted-2 hover:text-ink transition-colors"
+                title="Rename Project"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                onClick={() => onDuplicateProject(proj)}
+                className="p-1 text-ink-muted-2 hover:text-ink transition-colors"
+                title="Duplicate Project (Assigned Next Serial)"
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+
+              {projects.length > 1 && (
+                <button
+                  onClick={() => {
+                    if (confirm(`Delete Serial ${serialNumStr} ("${proj.name}")?`)) {
+                      onDeleteProject(proj.id);
+                    }
+                  }}
+                  className="p-1 text-ink-muted-2 hover:text-ink transition-colors"
+                  title="Delete Project"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Title Editable or Rendered */}
+          {isEditing ? (
+            <div className="flex items-center space-x-1 mb-2">
+              <input
+                type="text"
+                value={editingName}
+                onChange={e => setEditingName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleSaveRename(proj.id);
+                }}
+                className="bg-canvas border border-ink text-ink text-xs font-bold p-1 w-full focus:outline-none"
+                autoFocus
+              />
+              <button
+                onClick={() => handleSaveRename(proj.id)}
+                className="bg-ink text-canvas p-1 hover:opacity-90"
+              >
+                <Check className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <h3
+              onClick={() => onOpenProject(proj)}
+              className="font-editorial font-bold text-ink text-base tracking-tight mb-1 cursor-pointer group-hover:underline transition-colors line-clamp-1"
+            >
+              {proj.name}
+            </h3>
+          )}
+
+          <p className="text-ink-muted text-xs line-clamp-2 mb-4 font-medium leading-relaxed">
+            {proj.description || 'LaTeX research paper workspace with bibtex citations.'}
+          </p>
+        </div>
+
+        {/* Card Footer Metadata & Launch Action */}
+        <div className="pt-3 border-t border-ink/15 flex items-center justify-between text-xs">
+          <div className="flex items-center space-x-2 text-[10px] font-editorial-mono text-ink-muted-2">
+            <Clock className="w-3 h-3" />
+            <span>{new Date(proj.updatedAt).toLocaleDateString()}</span>
+            <span>•</span>
+            <span>{proj.files.length} files</span>
+          </div>
+
+          <button
+            onClick={() => onOpenProject(proj)}
+            className="px-3.5 py-1.5 bg-canvas hover:bg-ink text-ink hover:text-canvas border border-ink/20 hover:border-ink font-bold text-xs uppercase tracking-wider transition-colors flex items-center space-x-1.5"
+          >
+            <span>Launch Workspace</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderTemplateCard = (template: Template) => (
+    <div
+      key={template.id}
+      className="bg-paper border border-ink/15 p-4 hover:border-ink/40 transition-colors flex flex-col justify-between"
+    >
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="font-bold text-ink text-xs tracking-tight">
+            {template.name}
+          </span>
+          <span className="border border-ink/20 bg-canvas text-ink-muted-2 font-editorial-mono text-[9px] px-1.5 py-0.2 uppercase">
+            {template.category}
+          </span>
+        </div>
+        <p className="text-ink-muted text-xs leading-relaxed line-clamp-2 mb-3 font-medium">
+          {template.description}
+        </p>
+      </div>
+
+      <button
+        onClick={() => onSelectTemplate(template)}
+        className="w-full py-1.5 bg-canvas hover:bg-ink text-ink hover:text-canvas border border-ink/20 hover:border-ink font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center space-x-1.5"
+      >
+        <span>Use {template.name}</span>
+        <ArrowRight className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-canvas text-ink font-editorial-sans flex flex-col selection:bg-ink selection:text-canvas">
+    <div className="h-screen bg-canvas text-ink font-editorial-sans flex flex-col overflow-hidden selection:bg-ink selection:text-canvas">
       {/* Dashboard Top Header */}
       <header className="sticky top-0 z-40 bg-canvas border-b border-ink/15">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -164,30 +319,159 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <div className="h-5 w-px bg-ink/15 hidden sm:block" />
 
-            {/* User Badge Dropdown / Logout */}
-            <div className="flex items-center space-x-2 pl-1">
-              <UserAvatar name={user.name} email={user.avatarUrl || user.email} size={32} />
-              <div className="hidden md:flex flex-col text-left">
-                <span className="text-xs font-bold text-ink leading-tight">{user.name}</span>
-                <span className="text-[9px] font-editorial-mono text-ink-muted-2">{user.role}</span>
-              </div>
-
+            {/* User Badge Dropdown — Settings & Log Out under the profile */}
+            <div className="relative pl-1">
               <button
-                onClick={onLogout}
-                className="p-1.5 text-ink-muted-2 hover:text-ink hover:bg-paper transition-colors"
-                title="Log Out"
+                onClick={() => setIsUserMenuOpen(prev => !prev)}
+                className="flex items-center space-x-2 hover:bg-paper px-2 py-1 transition-colors"
+                title="Account Menu"
               >
-                <LogOut className="w-4 h-4" />
+                <UserAvatar name={user.name} email={user.avatarUrl || user.email} size={32} />
+                <div className="hidden md:flex flex-col text-left">
+                  <span className="text-xs font-bold text-ink leading-tight">{user.name}</span>
+                  <span className="text-[9px] font-editorial-mono text-ink-muted-2">{user.role}</span>
+                </div>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-ink-muted-2 transition-transform ${
+                    isUserMenuOpen ? 'rotate-180' : ''
+                  }`}
+                />
               </button>
+
+              {isUserMenuOpen && (
+                <>
+                  {/* Backdrop to close on outside click */}
+                  <div className="fixed inset-0 z-40" onClick={() => setIsUserMenuOpen(false)} />
+
+                  <div className="absolute right-0 top-full mt-2 z-50 w-56 bg-paper border border-ink/20 shadow-[4px_4px_0_0_rgba(10,10,10,0.15)]">
+                    {/* Profile Summary */}
+                    <div className="p-3 border-b border-ink/15">
+                      <p className="text-xs font-bold text-ink truncate">{user.name}</p>
+                      <p className="text-[10px] font-editorial-mono text-ink-muted-2 truncate">{user.email}</p>
+                    </div>
+
+                    {/* Menu Actions */}
+                    <div className="p-1.5">
+                      <button
+                        onClick={() => {
+                          setActiveSection('settings');
+                          setIsUserMenuOpen(false);
+                        }}
+                        className="w-full px-3 py-2 text-xs font-bold uppercase tracking-wider text-ink-muted-2 hover:text-ink hover:bg-canvas flex items-center space-x-2 transition-colors text-left"
+                      >
+                        <SettingsIcon className="w-3.5 h-3.5" />
+                        <span>Settings</span>
+                      </button>
+
+                      <button
+                        onClick={onLogout}
+                        className="w-full px-3 py-2 text-xs font-bold uppercase tracking-wider text-red-700 hover:bg-canvas flex items-center space-x-2 transition-colors text-left"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>Log Out</span>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
       </header>
 
+      {/* Mobile Section Tabs */}
+      <div className="lg:hidden sticky top-16 z-30 bg-canvas border-b border-ink/15">
+        <div className="flex overflow-x-auto px-4">
+          {NAV_SECTIONS.map(section => {
+            const isActive = activeSection === section.id;
+            return (
+              <button
+                key={section.id}
+                onClick={() => setActiveSection(section.id)}
+                className={`px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider border-b-2 -mb-px flex items-center space-x-1.5 shrink-0 transition-colors ${
+                  isActive
+                    ? 'border-ink text-ink'
+                    : 'border-transparent text-ink-muted-2 hover:text-ink'
+                }`}
+              >
+                {section.icon}
+                <span>{section.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Main Dashboard Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {/* User Banner Greeting & Quick Stats */}
-        <div className="bg-paper border border-ink/20 p-6 relative overflow-hidden">
+      <div className="flex flex-1 min-h-0">
+        {/* Desktop Sidebar — fixed height, independent internal scroll */}
+        <aside className="hidden lg:flex w-60 shrink-0 flex-col border-r border-ink/15 bg-paper">
+          {/* Sidebar User Card */}
+          <div className="p-4 border-b border-ink/15 flex items-center space-x-3">
+            <UserAvatar name={user.name} email={user.avatarUrl || user.email} size={40} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-ink truncate">{user.name}</p>
+              <p className="text-[10px] font-editorial-mono text-ink-muted-2 truncate">{user.role}</p>
+            </div>
+          </div>
+
+          {/* Sidebar Navigation */}
+          <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+            {NAV_SECTIONS.map(section => {
+              const isActive = activeSection === section.id;
+              return (
+                <button
+                  key={section.id}
+                  onClick={() => setActiveSection(section.id)}
+                  className={`w-full px-3 py-2 text-xs font-bold uppercase tracking-wider flex items-center space-x-2.5 border transition-colors ${
+                    isActive
+                      ? 'bg-ink text-canvas border-ink'
+                      : 'bg-transparent text-ink-muted-2 border-transparent hover:bg-canvas hover:text-ink'
+                  }`}
+                >
+                  {section.icon}
+                  <span className="flex-1 text-left">{section.label}</span>
+                  {section.id === 'projects' && (
+                    <span
+                      className={`text-[9px] font-editorial-mono px-1.5 py-0.5 border ${
+                        isActive
+                          ? 'bg-canvas text-ink border-canvas'
+                          : 'bg-canvas border-ink/20 text-ink-muted-2'
+                      }`}
+                    >
+                      {projects.length}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Sidebar Footer: Sync Status + Sign Out */}
+          <div className="p-3 border-t border-ink/15 space-y-2">
+            <div className="flex items-center justify-between text-[9px] font-editorial-mono uppercase tracking-widest">
+              <span className="text-ink-muted-2">Cloud Sync</span>
+              <span className={isCloudUser ? 'text-ink font-bold' : 'text-ink-muted-2'}>
+                {isCloudUser ? 'Connected' : 'Local'}
+              </span>
+            </div>
+            <button
+              onClick={onLogout}
+              className="w-full py-2 bg-canvas border border-ink/20 hover:bg-ink hover:text-canvas hover:border-ink text-xs font-bold uppercase tracking-wider flex items-center justify-center space-x-2 transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sign Out</span>
+            </button>
+          </div>
+        </aside>
+
+        {/* Main Content Area — scrolls independently; header/sidebar/footer stay fixed */}
+        <main className="flex-1 min-w-0 overflow-y-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+            {activeSection === 'overview' && (
+              <>
+                {/* User Banner Greeting & Quick Stats */}
+                <div className="bg-paper border border-ink/20 p-6 relative overflow-hidden">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
             <div className="space-y-2 max-w-xl">
               <div className="inline-flex items-center space-x-2 border border-ink/20 bg-canvas px-2.5 py-0.5 text-[10px] font-editorial-mono text-ink-muted-2 uppercase tracking-widest">
@@ -245,8 +529,76 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* PROJECT SERIAL MANAGEMENT SECTION */}
-        <div className="space-y-4">
+                {/* Recent Manuscripts (Overview) */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <h3 className="font-editorial text-lg font-bold text-ink uppercase tracking-wider flex items-center space-x-2">
+                        <FolderPlus className="w-5 h-5 text-ink" />
+                        <span>Recent Manuscripts</span>
+                      </h3>
+                      <p className="text-ink-muted-2 text-xs font-editorial-mono mt-0.5">
+                        Your latest serial project workspaces — open or continue editing.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setActiveSection('projects')}
+                      className="px-3 py-1.5 bg-canvas border border-ink/20 text-ink-muted-2 hover:text-ink hover:border-ink text-xs font-bold uppercase tracking-wider flex items-center space-x-1.5 transition-colors"
+                    >
+                      <span>All Projects</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {indexedProjects.slice(0, 3).map(proj => renderProjectCard(proj))}
+                    {indexedProjects.length === 0 && (
+                      <div className="md:col-span-2 lg:col-span-3 p-12 text-center bg-paper border border-ink/20 space-y-3">
+                        <FileText className="w-10 h-10 text-ink-muted-2 mx-auto" />
+                        <p className="text-ink font-bold text-sm">No projects yet — create your first manuscript.</p>
+                        <button
+                          onClick={onCreateNewProject}
+                          className="bg-ink text-canvas px-4 py-2 text-xs font-bold uppercase tracking-widest hover:opacity-90 transition-opacity"
+                        >
+                          Create New Project
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Academic Templates (Overview) */}
+                <div className="space-y-4 pt-4 border-t border-ink/15">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <h3 className="font-editorial text-lg font-bold text-ink uppercase tracking-wider flex items-center space-x-2">
+                        <BookOpen className="w-5 h-5 text-ink" />
+                        <span>Academic Templates</span>
+                      </h3>
+                      <p className="text-ink-muted-2 text-xs font-editorial-mono mt-0.5">
+                        Quick-start scaffolds for journal & thesis formatting.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setActiveSection('templates')}
+                      className="px-3 py-1.5 bg-canvas border border-ink/20 text-ink-muted-2 hover:text-ink hover:border-ink text-xs font-bold uppercase tracking-wider flex items-center space-x-1.5 transition-colors"
+                    >
+                      <span>All Templates</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {STARTER_TEMPLATES.slice(0, 3).map(template => renderTemplateCard(template))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {activeSection === 'projects' && (
+              <>
+                {/* PROJECT SERIAL MANAGEMENT SECTION */}
+                <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-paper border border-ink/20 p-4">
             <div>
               <div className="flex items-center space-x-2">
@@ -316,120 +668,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredProjects.map(proj => {
-                const serialNumStr = `#${String(proj.serialNumber || 1).padStart(2, '0')}`;
-                const isEditing = editingProjectId === proj.id;
-
-                return (
-                  <div
-                    key={proj.id}
-                    className="bg-paper border border-ink/15 hover:border-ink/40 p-5 transition-all flex flex-col justify-between group relative"
-                  >
-                    <div>
-                      {/* Serial Tag + Compiler Badge */}
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center space-x-2">
-                          <span className="bg-ink text-canvas font-bold font-editorial-mono text-[10px] px-2 py-0.5 uppercase tracking-widest border border-ink">
-                            SERIAL {serialNumStr}
-                          </span>
-                          <span className="border border-ink/20 bg-canvas text-ink-muted-2 font-editorial-mono text-[9px] px-1.5 py-0.5 uppercase">
-                            {proj.compiler}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center space-x-1">
-                          <button
-                            onClick={() => handleStartRename(proj)}
-                            className="p-1 text-ink-muted-2 hover:text-ink transition-colors"
-                            title="Rename Project"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-
-                          <button
-                            onClick={() => onDuplicateProject(proj)}
-                            className="p-1 text-ink-muted-2 hover:text-ink transition-colors"
-                            title="Duplicate Project (Assigned Next Serial)"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </button>
-
-                          {projects.length > 1 && (
-                            <button
-                              onClick={() => {
-                                if (confirm(`Delete Serial ${serialNumStr} ("${proj.name}")?`)) {
-                                  onDeleteProject(proj.id);
-                                }
-                              }}
-                              className="p-1 text-ink-muted-2 hover:text-ink transition-colors"
-                              title="Delete Project"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Title Editable or Rendered */}
-                      {isEditing ? (
-                        <div className="flex items-center space-x-1 mb-2">
-                          <input
-                            type="text"
-                            value={editingName}
-                            onChange={e => setEditingName(e.target.value)}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') handleSaveRename(proj.id);
-                            }}
-                            className="bg-canvas border border-ink text-ink text-xs font-bold p-1 w-full focus:outline-none"
-                            autoFocus
-                          />
-                          <button
-                            onClick={() => handleSaveRename(proj.id)}
-                            className="bg-ink text-canvas p-1 hover:opacity-90"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ) : (
-                        <h3
-                          onClick={() => onOpenProject(proj)}
-                          className="font-editorial font-bold text-ink text-base tracking-tight mb-1 cursor-pointer group-hover:underline transition-colors line-clamp-1"
-                        >
-                          {proj.name}
-                        </h3>
-                      )}
-
-                      <p className="text-ink-muted text-xs line-clamp-2 mb-4 font-medium leading-relaxed">
-                        {proj.description || 'LaTeX research paper workspace with bibtex citations.'}
-                      </p>
-                    </div>
-
-                    {/* Card Footer Metadata & Launch Action */}
-                    <div className="pt-3 border-t border-ink/15 flex items-center justify-between text-xs">
-                      <div className="flex items-center space-x-2 text-[10px] font-editorial-mono text-ink-muted-2">
-                        <Clock className="w-3 h-3" />
-                        <span>{new Date(proj.updatedAt).toLocaleDateString()}</span>
-                        <span>•</span>
-                        <span>{proj.files.length} files</span>
-                      </div>
-
-                      <button
-                        onClick={() => onOpenProject(proj)}
-                        className="px-3.5 py-1.5 bg-canvas hover:bg-ink text-ink hover:text-canvas border border-ink/20 hover:border-ink font-bold text-xs uppercase tracking-wider transition-colors flex items-center space-x-1.5"
-                      >
-                        <span>Launch Workspace</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+              {filteredProjects.map(proj => renderProjectCard(proj))}
             </div>
           )}
-        </div>
+                </div>
+              </>
+            )}
 
-        {/* STARTER TEMPLATE SCAFFOLDS SECTION */}
-        <div className="space-y-4 pt-4 border-t border-ink/15">
+            {activeSection === 'templates' && (
+              <>
+                {/* STARTER TEMPLATE SCAFFOLDS SECTION */}
+                <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-editorial text-lg font-bold text-ink uppercase tracking-wider flex items-center space-x-2">
@@ -443,40 +692,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {STARTER_TEMPLATES.slice(0, 3).map((template: Template) => (
-              <div
-                key={template.id}
-                className="bg-paper border border-ink/15 p-4 hover:border-ink/40 transition-colors flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-ink text-xs tracking-tight">
-                      {template.name}
-                    </span>
-                    <span className="border border-ink/20 bg-canvas text-ink-muted-2 font-editorial-mono text-[9px] px-1.5 py-0.2 uppercase">
-                      {template.category}
-                    </span>
-                  </div>
-                  <p className="text-ink-muted text-xs leading-relaxed line-clamp-2 mb-3 font-medium">
-                    {template.description}
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => onSelectTemplate(template)}
-                  className="w-full py-1.5 bg-canvas hover:bg-ink text-ink hover:text-canvas border border-ink/20 hover:border-ink font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center space-x-1.5"
-                >
-                  <span>Use {template.name}</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
+            {STARTER_TEMPLATES.map(template => renderTemplateCard(template))}
           </div>
-        </div>
-      </main>
+                </div>
+              </>
+            )}
+
+            {activeSection === 'settings' && (
+              <DashboardSettings
+                user={user}
+                isCloudUser={isCloudUser}
+                activeThemeId={activeThemeId}
+                onSelectTheme={onSelectTheme}
+                onOpenAiSettings={onOpenAiSettings}
+                onOpenAbout={onOpenAbout}
+              />
+            )}
+          </div>
+        </main>
+      </div>
 
       {/* Footer */}
-      <footer className="bg-canvas border-t border-ink/15 py-6 text-ink-muted-2 text-xs font-editorial-mono">
+      <footer className="bg-canvas border-t border-ink/15 py-2 text-ink-muted-2 text-xs font-editorial-mono">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center space-x-2">
             <span className="font-editorial font-bold text-ink">TeXForge Workspace</span>
