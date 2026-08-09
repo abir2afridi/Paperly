@@ -20,7 +20,7 @@ import { ShortcutsModal } from './components/ShortcutsModal';
 import { AboutModal } from './components/AboutModal';
 import { LandingPage } from './components/LandingPage';
 import { DashboardView } from './components/DashboardView';
-import { AuthModal, AuthUser } from './components/AuthModal';
+import { AuthPage, AuthUser } from './components/AuthPage';
 import {
   isTauri,
   onMenuEvent,
@@ -87,13 +87,12 @@ import {
 export default function App() {
   const initialTemplate = STARTER_TEMPLATES[0];
 
-  // Navigation View State ('landing', 'dashboard', 'workspace')
-  const [currentView, setCurrentView] = useState<'landing' | 'dashboard' | 'workspace'>('landing');
+  // Navigation View State ('landing', 'auth', 'dashboard', 'workspace')
+  const [currentView, setCurrentView] = useState<'landing' | 'auth' | 'dashboard' | 'workspace'>('landing');
 
   // Auth User State
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authModalMode, setAuthModalMode] = useState<'login' | 'signup'>('login');
+  const [authPageMode, setAuthPageMode] = useState<'login' | 'signup'>('login');
   const [isAboutOpen, setIsAboutOpen] = useState(false);
 
   // Restore Supabase session on app start + react to auth changes (e.g. other tabs / desktop menu)
@@ -124,6 +123,8 @@ export default function App() {
           role: u.academicRole,
           avatarUrl: u.avatarUrl || getAvatarUrl(u.email),
         });
+        // Landing on the auth page via OAuth redirect → move straight to the dashboard
+        setCurrentView(prev => (prev === 'auth' ? 'dashboard' : prev));
       }
     });
     return () => {
@@ -1167,10 +1168,10 @@ export default function App() {
     deleteCommentFromDb(commentId);
   };
 
-  // Open Auth Modal
+  // Open Auth Page
   const handleOpenAuth = (mode: 'login' | 'signup') => {
-    setAuthModalMode(mode);
-    setIsAuthModalOpen(true);
+    setAuthPageMode(mode);
+    setCurrentView('auth');
   };
 
   // On Login / Signup Success
@@ -1491,13 +1492,14 @@ export default function App() {
         </div>
       )}
 
-      {/* Auth Modal for Login & Signup */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        initialMode={authModalMode}
-        onLoginSuccess={handleLoginSuccess}
-      />
+      {/* Auth Page for Login & Signup */}
+      {currentView === 'auth' && (
+        <AuthPage
+          initialMode={authPageMode}
+          onLoginSuccess={handleLoginSuccess}
+          onBack={() => setCurrentView('landing')}
+        />
+      )}
 
       {/* Theme Selector Modal accessible globally */}
       <ThemeSelectorModal
