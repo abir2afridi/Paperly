@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import Editor, { OnMount, BeforeMount, Monaco } from '@monaco-editor/react';
+import { Loader2 } from 'lucide-react';
 import { BibEntry, CompileDiagnostic } from '../types';
 import { CODE_THEMES, CodeThemeId } from '../services/codeThemeService';
 
@@ -34,12 +35,33 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
 }) => {
   const editorRef = useRef<unknown>(null);
   const monacoRef = useRef<Monaco | null>(null);
+  const prevFilePathRef = useRef<string>(filePath);
   // Keep the latest compile callback so the Monaco Ctrl+Enter binding never
   // captures a stale closure (the editor instance survives prop re-renders).
   const onCompileRequestRef = useRef(onCompileRequest);
   useEffect(() => {
     onCompileRequestRef.current = onCompileRequest;
   }, [onCompileRequest]);
+
+  // On file switch: reset the viewport & cursor to the top of the new file.
+  // Monaco preserves scroll/cursor position across model value swaps, so the
+  // new source can otherwise appear "loaded in the middle" of the document.
+  useEffect(() => {
+    if (prevFilePathRef.current === filePath) return;
+    prevFilePathRef.current = filePath;
+    const editor = editorRef.current as
+      | {
+          setScrollPosition: (pos: { scrollTop: number }) => void;
+          setPosition: (pos: { lineNumber: number; column: number }) => void;
+        }
+      | null
+      | undefined;
+    if (!editor) return;
+    requestAnimationFrame(() => {
+      editor.setScrollPosition({ scrollTop: 0 });
+      editor.setPosition({ lineNumber: 1, column: 1 });
+    });
+  }, [filePath]);
 
   // 'match-theme' follows the workspace theme; any other selection uses a
   // fixed VS Code-style palette that is independent of the workspace theme.
@@ -447,6 +469,14 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
         value={content}
         onChange={value => onChange(value || '')}
         onMount={handleEditorMount}
+        loading={
+          <div className="w-full h-full flex items-center justify-center bg-white">
+            <div className="flex items-center space-x-2 text-xs text-slate-500 font-mono">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#D11111]" />
+              <span>Initializing LaTeX editor…</span>
+            </div>
+          </div>
+        }
         options={{
           fontSize: 13,
           fontFamily: 'JetBrains Mono, Menlo, Monaco, Consolas, monospace',

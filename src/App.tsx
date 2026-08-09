@@ -1350,7 +1350,10 @@ export default function App() {
               </div>
 
               <div className="flex-1 relative overflow-hidden">
-                {editorMode === 'code' ? (
+                {/* Both editors stay mounted; visibility toggles with CSS so the
+                    Monaco instance is never re-created (avoids repeated loading
+                    every time the user switches Code Source / Visual AST Mode). */}
+                <div className={editorMode === 'code' ? 'h-full' : 'hidden'}>
                   <MonacoEditor
                     content={activeFile?.content || ''}
                     onChange={handleFileContentChange}
@@ -1362,13 +1365,14 @@ export default function App() {
                     apiRef={editorApiRef}
                     onCompileRequest={handleCompile}
                   />
-                ) : (
+                </div>
+                <div className={editorMode === 'visual' ? 'h-full' : 'hidden'}>
                   <VisualRichTextEditor
                     content={activeFile?.content || ''}
                     onChange={handleFileContentChange}
                     onInsertLatex={handleInsertLatex}
                   />
-                )}
+                </div>
               </div>
             </main>
 
