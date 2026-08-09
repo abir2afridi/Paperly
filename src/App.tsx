@@ -20,7 +20,7 @@ import { ShortcutsModal } from './components/ShortcutsModal';
 import { AboutModal } from './components/AboutModal';
 import { LandingPage } from './components/LandingPage';
 import { DashboardView } from './components/DashboardView';
-import { AuthModal } from './components/AuthModal';
+import { AuthModal, AuthUser } from './components/AuthModal';
 import {
   isTauri,
   onMenuEvent,
@@ -28,10 +28,36 @@ import {
   pickImportZip,
   pickExportZip,
 } from './desktop/bridge';
+import {
+  isDatabaseAvailable,
+  getSessionUser,
+  onAuthStateChange,
+  signOutFromApp,
+  fetchProjects,
+  createProject,
+  updateProjectMeta,
+  deleteProjectFromDb,
+  saveFiles,
+  deleteFileFromDb,
+  renameFileInDb,
+  fetchChatMessages,
+  sendChatMessage,
+  fetchActivityEvents,
+  recordActivity,
+  fetchComments,
+  addComment,
+  setCommentResolved,
+  deleteCommentFromDb,
+  fetchSnapshots,
+  createSnapshotInDb,
+  subscribeToProjectChanges,
+} from './services/db';
+import { getAvatarUrl } from './services/avatar';
 
 import {
   Project,
   ProjectFile,
+  CodeComment,
   CompilationResult,
   AIProviderConfig,
   PdfAnnotation,
@@ -65,10 +91,46 @@ export default function App() {
   const [currentView, setCurrentView] = useState<'landing' | 'dashboard' | 'workspace'>('landing');
 
   // Auth User State
-  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'signup'>('login');
   const [isAboutOpen, setIsAboutOpen] = useState(false);
+
+  // Restore Supabase session on app start + react to auth changes (e.g. other tabs / desktop menu)
+  useEffect(() => {
+    if (!isDatabaseAvailable()) return;
+    let mounted = true;
+    (async () => {
+      const user = await getSessionUser();
+      if (mounted && user) {
+        setCurrentUser({
+          id: user.id,
+          name: user.displayName,
+          email: user.email,
+          role: user.academicRole,
+          avatarUrl: user.avatarUrl || getAvatarUrl(user.email),
+        });
+        setCurrentView('dashboard');
+      }
+    })();
+    const unsubscribe = onAuthStateChange(u => {
+      if (!u) {
+        setCurrentUser(null);
+      } else {
+        setCurrentUser({
+          id: u.id,
+          name: u.displayName,
+          email: u.email,
+          role: u.academicRole,
+          avatarUrl: u.avatarUrl || getAvatarUrl(u.email),
+        });
+      }
+    });
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, []);
 
   // Theme Palette State
   const [activeThemeId, setActiveThemeId] = useState<ThemeId>(getStoredThemeId());
@@ -223,6 +285,198 @@ export default function App() {
   const [isCompiling, setIsCompiling] = useState<boolean>(false);
   const [compilationResult, setCompilationResult] = useState<CompilationResult | null>(null);
 
+  // ---- Cloud sync (Supabase) plumbing ----
+  const guestSeedProjects = [seedProject1, seedProject2, seedProject3];
+
+  // Mirrors the last content persisted to the DB per file id (autosave only uploads changes)
+  const savedFileContents = useRef<Map<string, string>>(new Map());
+  const currentUserRef = useRef<AuthUser | null>(currentUser);
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
+  const buildProjectFromTemplate = (name: string, template: Template): Project => {
+    const nextSerial = projectsList.length + 1;
+    const projectId = `project-${Date.now()}`;
+    return {
+      id: projectId,
+      serialNumber: nextSerial,
+      name,
+      description: `Academic ${template.category} scaffold.`,
+      ownerId: currentUser ? currentUser.id : 'guest-1',
+      ownerName: currentUser ? currentUser.name : 'Author',
+      compiler: 'PDFLATEX',
+      bibTool: 'BIBTEX',
+      mainFile: 'main.tex',
+      autoCompile: true,
+      isPublic: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      files: [
+        {
+          id: `file-${Date.now()}-1`,
+          projectId,
+          path: 'main.tex',
+          type: 'TEX',
+          content: template.mainFileContent,
+          sizeBytes: template.mainFileContent.length,
+          updatedAt: new Date().toISOString(),
+        },
+        ...(template.bibContent
+          ? [
+              {
+                id: `file-${Date.now()}-2`,
+                projectId,
+                path: 'references.bib',
+                type: 'BIB' as const,
+                content: template.bibContent,
+                sizeBytes: template.bibContent.length,
+                updatedAt: new Date().toISOString(),
+              },
+            ]
+          : []),
+      ],
+    };
+  };
+
+  // Load the user's projects from Supabase on sign-in; restore seeds for guests
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!currentUser?.id) {
+      setProjectsList(guestSeedProjects);
+      setProject(guestSeedProjects[0]);
+      setActiveFilePath('main.tex');
+      savedFileContents.current = new Map();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    (async () => {
+      const dbProjects = await fetchProjects();
+      if (cancelled) return;
+      if (dbProjects === null) {
+        // DB unreachable or migration not applied yet — keep the local guest view
+        setProjectsList(guestSeedProjects);
+        return;
+      }
+      if (dbProjects.length === 0) {
+        // First sign-in: scaffold a starter paper from the default template
+        const starter = buildProjectFromTemplate('My First LaTeX Paper', initialTemplate);
+        const created = await createProject(starter, currentUser.id);
+        if (!cancelled && created) {
+          created.files.forEach(f => savedFileContents.current.set(f.id, f.content || ''));
+          setProjectsList([created]);
+          setProject(created);
+          setActiveFilePath(created.mainFile || 'main.tex');
+        }
+        return;
+      }
+      const isSeedProject =
+        project.id.startsWith('project-serial-') ||
+        project.id.startsWith('project-new-') ||
+        project.id.startsWith('project-import-') ||
+        project.id.startsWith('project-dup-');
+      dbProjects.forEach(p => p.files.forEach(f => savedFileContents.current.set(f.id, f.content || '')));
+      setProjectsList(dbProjects);
+      if (isSeedProject) {
+        setProject(dbProjects[0]);
+        setActiveFilePath(dbProjects[0].mainFile || 'main.tex');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id]);
+
+  // Autosave: persist changed files + project metadata to Supabase (debounced)
+  // Pending edits are flushed immediately on project switch / logout / tab close
+  const pendingSaveRef = useRef<{ projectId: string; changed: ProjectFile[]; meta: { name: string; description: string; compiler: string; bib_tool: string; main_file: string; auto_compile: boolean; is_public: boolean } } | null>(null);
+  const prevProjectIdRef = useRef<string | null>(null);
+
+  const flushPendingSave = () => {
+    const pending = pendingSaveRef.current;
+    if (!pending || pending.changed.length === 0) return;
+    saveFiles(pending.projectId, pending.changed);
+    pending.changed.forEach(f => savedFileContents.current.set(f.id, f.content || ''));
+    pendingSaveRef.current = null;
+  };
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    pendingSaveRef.current = {
+      projectId: project.id,
+      changed: project.files.filter(f => savedFileContents.current.get(f.id) !== (f.content || '')),
+      meta: {
+        name: project.name,
+        description: project.description || '',
+        compiler: project.compiler,
+        bib_tool: project.bibTool,
+        main_file: project.mainFile,
+        auto_compile: project.autoCompile,
+        is_public: project.isPublic,
+      },
+    };
+    const timer = setTimeout(async () => {
+      const pending = pendingSaveRef.current;
+      if (!pending) return;
+      if (pending.changed.length > 0) {
+        await saveFiles(pending.projectId, pending.changed);
+        pending.changed.forEach(f => savedFileContents.current.set(f.id, f.content || ''));
+      }
+      await updateProjectMeta(pending.projectId, pending.meta);
+      pendingSaveRef.current = null;
+    }, 1500);
+    return () => {
+      clearTimeout(timer);
+      const prevId = prevProjectIdRef.current;
+      prevProjectIdRef.current = project.id;
+      if (prevId !== null && prevId !== project.id) {
+        flushPendingSave();
+      }
+    };
+  }, [project, currentUser?.id]);
+
+  useEffect(() => {
+    window.addEventListener('beforeunload', flushPendingSave);
+    return () => window.removeEventListener('beforeunload', flushPendingSave);
+  }, []);
+
+  // Load project-bound collaboration data (chat, activity, comments, snapshots)
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    let cancelled = false;
+    (async () => {
+      const [msgs, acts, cmts, snaps] = await Promise.all([
+        fetchChatMessages(project.id),
+        fetchActivityEvents(project.id),
+        fetchComments(project.id),
+        fetchSnapshots(project.id),
+      ]);
+      if (cancelled) return;
+      if (msgs) setChatMessages(msgs);
+      if (acts) setActivityEvents(acts);
+      if (cmts) setComments(cmts);
+      if (snaps) setSnapshots(snaps);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id, project.id]);
+
+  // Realtime: live chat / activity / comments for the open project
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    const unsubscribe = subscribeToProjectChanges(project.id, {
+      onChatMessage: msg => setChatMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg])),
+      onActivity: ev => setActivityEvents(prev => (prev.some(a => a.id === ev.id) ? prev : [ev, ...prev])),
+      onComment: c => setComments(prev => (prev.some(x => x.id === c.id) ? prev : [...prev, c])),
+    });
+    return unsubscribe;
+  }, [currentUser?.id, project.id]);
+
   // Editor Mode State (Code vs Visual AST)
   const [editorMode, setEditorMode] = useState<'code' | 'visual'>('code');
 
@@ -291,6 +545,9 @@ export default function App() {
       ],
     },
   ]);
+
+  // Review Comments (cloud-backed when signed in, local state otherwise)
+  const [comments, setComments] = useState<CodeComment[]>([]);
 
   // Panels & Modals Toggles
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
@@ -426,18 +683,20 @@ export default function App() {
 
       setCompilationResult(result);
 
-      // Record activity
-      setActivityEvents(prev => [
-        {
-          id: `act-${Date.now()}`,
-          projectId: project.id,
-          actorName: 'TeXForge Compiler',
-          type: result.status === 'success' ? 'COMPILE_SUCCESS' : 'COMPILE_ERROR',
-          description: result.status === 'success' ? 'Compilation succeeded in ' + result.durationMs + 'ms' : 'Compilation failed with errors',
-          timestamp: new Date().toISOString(),
-        },
-        ...prev,
-      ]);
+      // Record activity (cloud-backed when signed in)
+      const activityEntry: ActivityEvent = {
+        id: `act-${Date.now()}`,
+        projectId: project.id,
+        actorName: 'TeXForge Compiler',
+        type: result.status === 'success' ? 'COMPILE_SUCCESS' : 'COMPILE_ERROR',
+        description: result.status === 'success' ? 'Compilation succeeded in ' + result.durationMs + 'ms' : 'Compilation failed with errors',
+        timestamp: new Date().toISOString(),
+      };
+      setActivityEvents(prev => [activityEntry, ...prev]);
+      const u = currentUserRef.current;
+      if (u) {
+        recordActivity(project.id, u.id, u.name, activityEntry.type, activityEntry.description);
+      }
     } finally {
       setIsCompiling(false);
     }
@@ -531,6 +790,7 @@ export default function App() {
 
     setProject(prev => ({ ...prev, files: [...prev.files, newFile] }));
     setActiveFilePath(path);
+    if (currentUser?.id) recordProjectActivity('FILE_CREATE', `created ${path}`);
   };
 
   // Delete File
@@ -547,6 +807,8 @@ export default function App() {
     if (activeFilePath === path) {
       setActiveFilePath(project.files.find(f => f.path !== path)?.path || 'main.tex');
     }
+    if (currentUser?.id) deleteFileFromDb(project.id, path);
+    recordProjectActivity('FILE_DELETE', `deleted ${path}`);
   };
 
   // Rename File
@@ -557,6 +819,8 @@ export default function App() {
       files: prev.files.map(f => (f.path === oldPath ? { ...f, path: newPath } : f)),
     }));
     if (activeFilePath === oldPath) setActiveFilePath(newPath);
+    if (currentUser?.id) renameFileInDb(project.id, oldPath, newPath);
+    recordProjectActivity('FILE_CREATE', `renamed ${oldPath} to ${newPath}`);
   };
 
   // Set Main File
@@ -596,47 +860,21 @@ export default function App() {
   };
 
   // Select Starter Template
-  const handleSelectTemplate = (template: Template) => {
-    const nextSerial = projectsList.length + 1;
-    const newProject: Project = {
-      id: `project-${Date.now()}`,
-      serialNumber: nextSerial,
-      name: `${template.name} Document`,
-      description: `Academic ${template.category} scaffold.`,
-      ownerId: currentUser ? 'user-1' : 'guest-1',
-      ownerName: currentUser ? currentUser.name : 'Author',
-      compiler: 'PDFLATEX',
-      bibTool: 'BIBTEX',
-      mainFile: 'main.tex',
-      autoCompile: true,
-      isPublic: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      files: [
-        {
-          id: `file-${Date.now()}-1`,
-          projectId: `project-${Date.now()}`,
-          path: 'main.tex',
-          type: 'TEX',
-          content: template.mainFileContent,
-          sizeBytes: template.mainFileContent.length,
-          updatedAt: new Date().toISOString(),
-        },
-        ...(template.bibContent
-          ? [
-              {
-                id: `file-${Date.now()}-2`,
-                projectId: `project-${Date.now()}`,
-                path: 'references.bib',
-                type: 'BIB' as const,
-                content: template.bibContent,
-                sizeBytes: template.bibContent.length,
-                updatedAt: new Date().toISOString(),
-              },
-            ]
-          : []),
-      ],
-    };
+  const handleSelectTemplate = async (template: Template) => {
+    const newProject = buildProjectFromTemplate(`${template.name} Document`, template);
+
+    if (currentUser?.id) {
+      const created = await createProject(newProject, currentUser.id);
+      if (created) {
+        created.files.forEach(f => savedFileContents.current.set(f.id, f.content || ''));
+        setProjectsList(prev => [created, ...prev]);
+        setProject(created);
+        setActiveFilePath('main.tex');
+        setCurrentView('workspace');
+        setTimeout(() => handleCompile(), 100);
+        return;
+      }
+    }
 
     setProjectsList(prev => [newProject, ...prev]);
     setProject(newProject);
@@ -728,7 +966,7 @@ export default function App() {
         serialNumber: nextSerial,
         name: projectName,
         description: 'Imported LaTeX ZIP project.',
-        ownerId: 'user-1',
+        ownerId: currentUser ? currentUser.id : 'user-1',
         ownerName: currentUser ? currentUser.name : 'Author',
         compiler: 'PDFLATEX',
         bibTool: 'BIBTEX',
@@ -739,6 +977,19 @@ export default function App() {
         updatedAt: new Date().toISOString(),
         files: importedFiles,
       };
+
+      if (currentUser?.id) {
+        const created = await createProject(importedProject, currentUser.id);
+        if (created) {
+          created.files.forEach(f => savedFileContents.current.set(f.id, f.content || ''));
+          setProjectsList(prev => [created, ...prev]);
+          setProject(created);
+          setActiveFilePath(created.mainFile || 'main.tex');
+          setCurrentView('workspace');
+          setTimeout(() => handleCompile(), 100);
+          return;
+        }
+      }
 
       setProjectsList(prev => [importedProject, ...prev]);
       setProject(importedProject);
@@ -767,6 +1018,7 @@ export default function App() {
       const remaining = projectsList.filter(p => p.id !== projectId);
       setProject(remaining[0]);
     }
+    if (currentUser?.id) deleteProjectFromDb(projectId);
   };
 
   const handleDuplicateProject = (proj: Project) => {
@@ -778,7 +1030,21 @@ export default function App() {
       name: `Copy of ${proj.name}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      files: proj.files.map(f => ({
+        ...f,
+        id: `file-dup-${Date.now()}-${Math.random()}`,
+        projectId: `project-dup-${Date.now()}`,
+      })),
     };
+    if (currentUser?.id) {
+      createProject(duplicated, currentUser.id).then(created => {
+        if (created) {
+          created.files.forEach(f => savedFileContents.current.set(f.id, f.content || ''));
+          setProjectsList(prev => [created, ...prev]);
+        }
+      });
+      return;
+    }
     setProjectsList(prev => [duplicated, ...prev]);
   };
 
@@ -789,46 +1055,30 @@ export default function App() {
     if (project.id === projectId) {
       setProject(prev => ({ ...prev, name: newName, updatedAt: new Date().toISOString() }));
     }
+    if (currentUser?.id) updateProjectMeta(projectId, { name: newName });
   };
 
   // Create New Project
-  const handleNewProject = () => {
+  const handleNewProject = async () => {
     const nextSerial = projectsList.length + 1;
-    const newProj: Project = {
-      id: `project-new-${Date.now()}`,
-      serialNumber: nextSerial,
-      name: `LaTeX Research Project #${String(nextSerial).padStart(2, '0')}`,
-      description: 'New academic LaTeX document workspace.',
-      ownerId: 'user-1',
-      ownerName: currentUser ? currentUser.name : 'Author',
-      compiler: 'PDFLATEX',
-      bibTool: 'BIBTEX',
-      mainFile: 'main.tex',
-      autoCompile: true,
-      isPublic: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      files: [
-        {
-          id: `file-${Date.now()}-1`,
-          projectId: `project-new-${Date.now()}`,
-          path: 'main.tex',
-          type: 'TEX',
-          content: initialTemplate.mainFileContent,
-          sizeBytes: initialTemplate.mainFileContent.length,
-          updatedAt: new Date().toISOString(),
-        },
-        {
-          id: `file-${Date.now()}-2`,
-          projectId: `project-new-${Date.now()}`,
-          path: 'references.bib',
-          type: 'BIB',
-          content: initialTemplate.bibContent || '',
-          sizeBytes: (initialTemplate.bibContent || '').length,
-          updatedAt: new Date().toISOString(),
-        },
-      ],
-    };
+    const newProj = buildProjectFromTemplate(
+      `LaTeX Research Project #${String(nextSerial).padStart(2, '0')}`,
+      initialTemplate
+    );
+    newProj.description = 'New academic LaTeX document workspace.';
+
+    if (currentUser?.id) {
+      const created = await createProject(newProj, currentUser.id);
+      if (created) {
+        created.files.forEach(f => savedFileContents.current.set(f.id, f.content || ''));
+        setProjectsList(prev => [created, ...prev]);
+        setProject(created);
+        setActiveFilePath('main.tex');
+        setCurrentView('workspace');
+        setTimeout(() => handleCompile(), 100);
+        return;
+      }
+    }
 
     setProjectsList(prev => [newProj, ...prev]);
     setProject(newProj);
@@ -856,7 +1106,65 @@ export default function App() {
     }));
 
     setActiveFilePath(restoredFiles[0].path);
+    const u = currentUserRef.current;
+    if (u) recordActivity(project.id, u.id, u.name, 'VERSION_RESTORE', `restored snapshot "${snapshot.title}"`);
     setTimeout(() => handleCompile(), 100);
+  };
+
+  // Cloud-persist an activity event for the open project (no-op for guests)
+  const recordProjectActivity = (type: ActivityEvent['type'], description: string) => {
+    const u = currentUserRef.current;
+    if (!u) return;
+    recordActivity(project.id, u.id, u.name, type, description);
+  };
+
+  // Create a version snapshot (cloud-backed when signed in)
+  const handleCreateSnapshot = (title: string) => {
+    const snapshotFiles = project.files.map(f => ({ path: f.path, content: f.content || '' }));
+    if (currentUser?.id) {
+      createSnapshotInDb(project.id, title, snapshotFiles).then(created => {
+        if (created) setSnapshots(prev => [created, ...prev]);
+      });
+      return;
+    }
+    setSnapshots(prev => [
+      {
+        id: `snap-${Date.now()}`,
+        projectId: project.id,
+        title,
+        createdAt: new Date().toISOString(),
+        files: snapshotFiles,
+      },
+      ...prev,
+    ]);
+  };
+
+  // Review comments (cloud-backed when signed in)
+  const handleAddComment = (comment: { filePath: string; anchorLine?: number; authorName: string; body: string }) => {
+    if (!currentUser?.id) return;
+    addComment({
+      projectId: project.id,
+      filePath: comment.filePath,
+      anchorLine: comment.anchorLine,
+      authorId: currentUser.id,
+      authorName: comment.authorName,
+      body: comment.body,
+    }).then(created => {
+      if (created) setComments(prev => [...prev, created]);
+    });
+    recordProjectActivity('COMMENT_ADD', `commented on ${comment.filePath}`);
+  };
+
+  const handleToggleCommentResolve = (commentId: string) => {
+    const target = comments.find(c => c.id === commentId);
+    if (!target) return;
+    setComments(prev => prev.map(c => (c.id === commentId ? { ...c, resolved: !c.resolved } : c)));
+    setCommentResolved(commentId, !target.resolved);
+  };
+
+  const handleDeleteComment = (commentId: string) => {
+    setComments(prev => prev.filter(c => c.id !== commentId));
+    deleteCommentFromDb(commentId);
   };
 
   // Open Auth Modal
@@ -866,13 +1174,15 @@ export default function App() {
   };
 
   // On Login / Signup Success
-  const handleLoginSuccess = (user: { name: string; email: string; role: string }) => {
+  const handleLoginSuccess = (user: AuthUser) => {
     setCurrentUser(user);
     setCurrentView('dashboard');
   };
 
   // Logout
   const handleLogout = () => {
+    flushPendingSave();
+    signOutFromApp();
     setCurrentUser(null);
     setCurrentView('landing');
   };
@@ -897,9 +1207,9 @@ export default function App() {
         <DashboardView
           user={
             currentUser || {
-              name: 'Dr. Aris Thorne',
-              email: 'author@texforge.io',
-              role: 'Lead Academic Researcher',
+              name: 'Guest Author',
+              email: 'guest@texforge.local',
+              role: 'Local Mode',
             }
           }
           projects={projectsList}
@@ -966,6 +1276,26 @@ export default function App() {
               onFileUpload={() => {}}
               collapsed={isSidebarCollapsed}
               onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
+              userName={currentUser?.name}
+              comments={currentUser ? comments : undefined}
+              onAddComment={currentUser ? handleAddComment : undefined}
+              onToggleResolveComment={currentUser ? handleToggleCommentResolve : undefined}
+              onDeleteComment={currentUser ? handleDeleteComment : undefined}
+              chatMessages={currentUser ? chatMessages : undefined}
+              onSendChatMessage={
+                currentUser
+                  ? body => {
+                      sendChatMessage(project.id, currentUser.id, currentUser.name, body).then(created => {
+                        if (created) setChatMessages(prev => [...prev, created]);
+                      });
+                    }
+                  : undefined
+              }
+              activities={currentUser ? activityEvents : undefined}
+              snapshots={currentUser ? snapshots : undefined}
+              onCreateSnapshot={currentUser ? handleCreateSnapshot : undefined}
+              onRestoreSnapshot={handleRestoreSnapshot}
+              activeFileContent={activeFile?.content || ''}
             />
 
             {/* Center Monaco LaTeX Editor / Visual Rich Text Editor */}
@@ -1072,7 +1402,24 @@ export default function App() {
               isOpen={isChatPanelOpen}
               onClose={() => setIsChatPanelOpen(false)}
               messages={chatMessages}
-              onSendMessage={body => setChatMessages(prev => [...prev, { id: `chat-${Date.now()}`, projectId: project.id, authorName: currentUser ? currentUser.name : 'You (Author)', body, createdAt: new Date().toISOString() }])}
+              onSendMessage={body => {
+                if (currentUser?.id) {
+                  sendChatMessage(project.id, currentUser.id, currentUser.name, body).then(created => {
+                    if (created) setChatMessages(prev => [...prev, created]);
+                  });
+                } else {
+                  setChatMessages(prev => [
+                    ...prev,
+                    {
+                      id: `chat-${Date.now()}`,
+                      projectId: project.id,
+                      authorName: 'You (Author)',
+                      body,
+                      createdAt: new Date().toISOString(),
+                    },
+                  ]);
+                }
+              }}
               activities={activityEvents}
             />
           </div>

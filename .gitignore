@@ -17,6 +17,9 @@ server.js
 # Local AI provider config (contains encrypted API keys)
 .texforge-ai-providers.json
 
+# AI agent skill package lockfile (tooling-only metadata)
+skills-lock.json
+
 # Temp debug scripts
 .tmp-*
 
@@ -30,6 +33,7 @@ pnpm-debug.log*
 
 # Editor / IDE
 .claude/
+.agents/
 .vscode/*
 !.vscode/extensions.json
 .idea/
@@ -38,6 +42,10 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+
+# Database 
+supabase.json
+
 
 # VS Code Local History
 .history/

@@ -27,9 +27,10 @@ import {
 import { Project, Template } from '../types';
 import { STARTER_TEMPLATES } from '../data/templates';
 import { THEMES, ThemeId } from '../services/themeService';
+import { UserAvatar } from './UserAvatar';
 
 interface DashboardViewProps {
-  user: { name: string; email: string; role: string };
+  user: { name: string; email: string; role: string; avatarUrl?: string };
   projects: Project[];
   onOpenProject: (project: Project) => void;
   onCreateNewProject: () => void;
@@ -165,9 +166,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             {/* User Badge Dropdown / Logout */}
             <div className="flex items-center space-x-2 pl-1">
-              <div className="w-8 h-8 border border-ink/30 bg-paper-deep flex items-center justify-center text-ink font-editorial font-bold text-xs">
-                {user.name.charAt(0)}
-              </div>
+              <UserAvatar name={user.name} email={user.avatarUrl || user.email} size={32} />
               <div className="hidden md:flex flex-col text-left">
                 <span className="text-xs font-bold text-ink leading-tight">{user.name}</span>
                 <span className="text-[9px] font-editorial-mono text-ink-muted-2">{user.role}</span>

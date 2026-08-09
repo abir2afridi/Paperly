@@ -68,6 +68,7 @@ interface SidebarProps {
   // Sidebar collapse / expand
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  userName?: string;
 
   // Module 2: Comments
   comments?: CodeComment[];
@@ -108,6 +109,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   collapsed = false,
   onToggleCollapse,
+
+  userName = 'Dr. Aris Thorne',
 
   comments: propComments,
   onAddComment,
@@ -367,7 +370,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       projectId: 'proj-1',
       filePath: activeFilePath,
       anchorLine: isNaN(lineNum) ? undefined : lineNum,
-      authorName: 'Dr. Aris Thorne',
+      authorName: userName,
       body: newCommentBody.trim(),
       resolved: false,
       createdAt: new Date().toISOString(),
@@ -377,7 +380,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       onAddComment({
         filePath: activeFilePath,
         anchorLine: isNaN(lineNum) ? undefined : lineNum,
-        authorName: 'Dr. Aris Thorne',
+        authorName: userName,
         body: newCommentBody.trim(),
       });
     } else {
