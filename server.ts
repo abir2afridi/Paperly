@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
 
@@ -58,6 +59,31 @@ interface ServerAIProvider {
 }
 
 const aiProvidersStore: ServerAIProvider[] = [];
+
+// Persistent storage for AI provider configs (apiKeyEnc is AES-GCM encrypted)
+const PROVIDERS_FILE = path.join(process.cwd(), '.texforge-ai-providers.json');
+
+function saveProviders(): void {
+  try {
+    fs.writeFileSync(PROVIDERS_FILE, JSON.stringify(aiProvidersStore, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Failed to persist AI providers:', err);
+  }
+}
+
+function loadProviders(): void {
+  try {
+    if (!fs.existsSync(PROVIDERS_FILE)) return;
+    const raw = JSON.parse(fs.readFileSync(PROVIDERS_FILE, 'utf8'));
+    if (Array.isArray(raw)) {
+      aiProvidersStore.splice(0, aiProvidersStore.length, ...raw);
+    }
+  } catch (err) {
+    console.error('Failed to load AI providers:', err);
+  }
+}
+
+loadProviders();
 
 // ================= API ROUTES =================
 
@@ -125,6 +151,7 @@ app.post('/api/ai/providers', (req, res) => {
   };
 
   aiProvidersStore.push(newProvider);
+  saveProviders();
 
   res.json({
     id: newProvider.id,
@@ -165,6 +192,8 @@ app.patch('/api/ai/providers/:id', (req, res) => {
     provider.isDefault = true;
   }
 
+  saveProviders();
+
   res.json({ success: true, id: provider.id });
 });
 
@@ -174,6 +203,7 @@ app.delete('/api/ai/providers/:id', (req, res) => {
   if (idx !== -1) {
     aiProvidersStore.splice(idx, 1);
   }
+  saveProviders();
   res.json({ success: true });
 });
 
@@ -256,6 +286,7 @@ app.post('/api/ai/providers/:id/test', async (req, res) => {
     provider.isVerified = true;
     provider.lastTestedAt = new Date().toISOString();
     provider.lastError = undefined;
+    saveProviders();
 
     res.json({
       ok: true,
@@ -268,6 +299,7 @@ app.post('/api/ai/providers/:id/test', async (req, res) => {
     provider.isVerified = false;
     provider.lastError = errorMsg;
     provider.lastTestedAt = new Date().toISOString();
+    saveProviders();
 
     res.status(400).json({
       ok: false,
@@ -275,6 +307,42 @@ app.post('/api/ai/providers/:id/test', async (req, res) => {
     });
   }
 });
+
+// Parse an OpenAI-compatible or Anthropic completion response, handling SSE streams
+function parseCompletionBody(rawBody: string, providerType: string): string {
+  const trimmed = rawBody.trim();
+  if (trimmed.startsWith('data:')) {
+    let fullText = '';
+    for (const line of trimmed.split('\n')) {
+      const l = line.trim();
+      if (!l.startsWith('data:')) continue;
+      const payload = l.slice(5).trim();
+      if (!payload || payload === '[DONE]') continue;
+      try {
+        const obj = JSON.parse(payload);
+        if (providerType === 'anthropic') {
+          if (obj.type === 'content_block_delta' && typeof obj.delta?.text === 'string') {
+            fullText += obj.delta.text;
+          }
+        } else {
+          const delta = obj.choices?.[0]?.delta?.content;
+          const content = obj.choices?.[0]?.message?.content;
+          if (typeof delta === 'string') fullText += delta;
+          else if (typeof content === 'string') fullText += content;
+        }
+      } catch {
+        // Skip malformed stream chunk
+      }
+    }
+    return fullText || 'No response generated.';
+  }
+
+  const data = JSON.parse(trimmed);
+  if (providerType === 'anthropic') {
+    return data.content?.[0]?.text || 'No response generated.';
+  }
+  return data.choices?.[0]?.message?.content || 'No response generated.';
+}
 
 // POST Generate AI completions for TeXForge actions
 app.post('/api/ai/generate', async (req, res) => {
@@ -299,7 +367,19 @@ app.post('/api/ai/generate', async (req, res) => {
   }
 
   try {
-    const systemPrompt = `You are TeXForge AI, an expert LaTeX co-author and debugging assistant. Your goal is to produce precise, valid LaTeX code snippet responses.`;
+    const systemPrompt = `You are TeXForge AI, an expert LaTeX co-author and debugging assistant embedded in the TeXForge web editor.
+
+Respond in a helpful, structured teaching style. Follow these rules every time:
+
+1. Be thorough and concrete: explain the problem briefly, then provide the exact working fix, ready to paste.
+2. Ground your answer in the user's actual document: reference their file names, commands, and citations (e.g. \\cite{...}, \\begin{...}) when they appear in the context, and point out what will fail and why.
+3. Include complete, valid LaTeX code snippets in fenced code blocks (\`\`\`latex ... \`\`\`). Include the surrounding environment when needed so it compiles as-is.
+4. If a fix needs a supporting file (like a .bib, .cls, or .sty), show the minimal full file content, and also offer a simpler alternative that works without that file (e.g. show thebibliography as an alternative to BibTeX).
+5. Use short sections and bullet points for readability. Keep prose tight and professional.
+6. Never invent packages or commands that do not exist, and never guess — if something is not in the context, ask for it.
+7. End with a short line inviting the user to tell you what to modify or debug next.
+
+This is the context: write your answers in the language the user wrote in; if unsure, use English.`;
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -324,8 +404,7 @@ app.post('/api/ai/generate', async (req, res) => {
         throw new Error(await response.text());
       }
 
-      const data = await response.json();
-      const answer = data.content?.[0]?.text || 'No response generated.';
+      const answer = parseCompletionBody(await response.text(), 'anthropic');
       res.json({ result: answer, providerModel: provider.model });
     } else {
       headers['Authorization'] = `Bearer ${decryptedKey}`;
@@ -352,8 +431,7 @@ app.post('/api/ai/generate', async (req, res) => {
         throw new Error(await response.text());
       }
 
-      const data = await response.json();
-      const answer = data.choices?.[0]?.message?.content || 'No response generated.';
+      const answer = parseCompletionBody(await response.text(), provider.providerType);
       res.json({ result: answer, providerModel: provider.model });
     }
   } catch (err: unknown) {

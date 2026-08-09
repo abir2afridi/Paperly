@@ -14,6 +14,12 @@ server.js
 .env.*
 !.env.example
 
+# Local AI provider config (contains encrypted API keys)
+.texforge-ai-providers.json
+
+# Temp debug scripts
+.tmp-*
+
 # Logs
 logs/
 *.log
