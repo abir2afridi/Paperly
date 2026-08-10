@@ -2,7 +2,12 @@ import { CompilationResult, CompileDiagnostic, ProjectFile } from '../types';
 
 /**
  * TeXForge LaTeX Compilation Engine
- * Implements a full-featured LaTeX parser & PDF generator with detailed .log diagnostic analysis.
+ *
+ * A parser-based typesetter: it validates the document structure & resources
+ * (classes, packages, inputs, graphics, bibliography), extracts the outline,
+ * and renders a paginated PDF from the parsed content — like an Overleaf
+ * compile pipeline but without a full TeX distribution. Diagnostics are
+ * generated from the same .log format conventions TeX uses.
  */
 
 export interface CompileOptions {
@@ -12,9 +17,70 @@ export interface CompileOptions {
   bibTool: 'BIBTEX' | 'BIBER' | 'NONE';
 }
 
-/**
- * Parses LaTeX content and .log output to extract errors, warnings, and line numbers
- */
+// =============================================================
+// Known resource catalogs (what the parser-based engine supports)
+// =============================================================
+
+const BUILTIN_CLASSES = [
+  'article', 'report', 'book', 'letter', 'slides', 'minimal',
+  'beamer', 'memoir', 'amsart', 'amsbook', 'proc', 'standalone',
+  'IEEEtran', 'acmart', 'llncs', 'revtex4-1', 'revtex4-2',
+  'scrartcl', 'scrreprt', 'scrbook', 'exam', 'tufte-book', 'tufte-handout',
+  'elsarticle', 'apa6', 'apa7', 'cvpr', 'ijcai24', 'jmlr',
+];
+
+const KNOWN_PACKAGES = [
+  // Math
+  'amsmath', 'amssymb', 'amsfonts', 'amsthm', 'mathtools', 'bm', 'braket',
+  'empheq', 'physics', 'cancel', 'mathrsfs', 'stmaryrd', 'esint', 'euscript',
+  'cases', 'siunitx', 'units', 'mhchem', 'chemfig',
+  // Graphics & floats
+  'graphicx', 'graphics', 'float', 'caption', 'subcaption', 'subfig', 'wrapfig',
+  'rotating', 'pdfpages', 'tikz', 'pgfplots', 'xcolor', 'adjustbox', 'framed',
+  'mdframed', 'tcolorbox', 'fancybox',
+  // Tables
+  'booktabs', 'array', 'tabularx', 'longtable', 'multirow', 'makecell',
+  'tabularray', 'colortbl', 'dcolumn',
+  // Layout & typography
+  'geometry', 'hyperref', 'url', 'xurl', 'microtype', 'setspace', 'indentfirst',
+  'parskip', 'titlesec', 'titleps', 'tocloft', 'fancyhdr', 'fancyhdr-extra',
+  'enumitem', 'sectsty', 'multicol', 'ragged2e', 'textcomp', 'latexsym', 'xspace',
+  'titling', 'relsize', 'accent', 'lineno',
+  // Text & languages
+  'babel', 'polyglossia', 'inputenc', 'fontenc', 'csquotes', 'lipsum', 'blindtext',
+  'dirtytalk', 'biblatex-chicago',
+  // Lists & theorems
+  'algorithm', 'algorithmic', 'algpseudocode', 'algorithm2e', 'listings',
+  'appendix', 'enumerate', 'paralist', 'tasks',
+  // Bibliography
+  'natbib', 'biblatex', 'bibentry', 'multibib',
+  // Misc / modern
+  'fontawesome5', 'fontawesome', 'awesomebox', 'acronym', 'glossaries', 'makeidx',
+  'imakeidx', 'tocbibind', 'hologo', 'microtype', 'verbatim', 'fancyvrb',
+  'pdfcomment', 'pifont', 'wasysym', 'marvosym', 'ulem', 'soul', 'xargs', 'etoolbox',
+];
+
+const KNOWN_ENVIRONMENTS = [
+  'document', 'abstract', 'keywords', 'figure', 'figure*', 'table', 'table*',
+  'equation', 'equation*', 'align', 'align*', 'gather', 'gather*', 'multline',
+  'multline*', 'split', 'cases', 'itemize', 'enumerate', 'description',
+  'verbatim', 'lstlisting', 'minted', 'code', 'tabular', 'tabularx', 'longtable',
+  'array', 'matrix', 'pmatrix', 'bmatrix', 'vmatrix', 'center', 'flushleft',
+  'flushright', 'quote', 'quotation', 'verse', 'minipage', 'tikzpicture',
+  'theorem', 'lemma', 'proof', 'definition', 'remark', 'example', 'corollary',
+  'proposition', 'conjecture', 'note', 'info', 'rhoenv', 'algorithm',
+  'algorithmic', 'titlepage', 'thebibliography', 'list', 'trivlist', 'picture',
+  'tabbing', 'filecontents', 'filecontents*', 'lrbox', 'displaymath', 'math',
+  'subequations', 'alignat', 'alignat*', 'flalign', 'flalign*', 'xalignat',
+  'xxalignat', 'comment',
+];
+
+const IMAGE_EXTENSIONS = ['png', 'pdf', 'jpg', 'jpeg', 'eps', 'svg'];
+
+// =============================================================
+// .log parsing
+// =============================================================
+
 export function parseLatexLog(rawLog: string, _files: ProjectFile[]): CompileDiagnostic[] {
   const diagnostics: CompileDiagnostic[] = [];
   const lines = rawLog.split('\n');
@@ -75,6 +141,231 @@ export function parseLatexLog(rawLog: string, _files: ProjectFile[]): CompileDia
   return diagnostics;
 }
 
+// =============================================================
+// Resource validation — Overleaf-style "file not found" errors
+// =============================================================
+
+function lineAt(text: string, index: number): number {
+  return text.slice(0, index).split('\n').length;
+}
+
+function findBibCiteKeys(files: ProjectFile[]): Set<string> {
+  const keys = new Set<string>();
+  for (const f of files) {
+    if (!f.path.endsWith('.bib') || !f.content) continue;
+    const re = /@\w+\s*\{\s*([^,\s]+)/g;
+    let m;
+    while ((m = re.exec(f.content)) !== null) {
+      keys.add(m[1]);
+    }
+  }
+  return keys;
+}
+
+/**
+ * Validates classes/packages/inputs/graphics/bibliography against the
+ * project file tree + known catalogs, producing real diagnostics.
+ */
+function validateResources(
+  texContent: string,
+  files: ProjectFile[],
+  mainPath: string
+): CompileDiagnostic[] {
+  const diagnostics: CompileDiagnostic[] = [];
+  const knownPaths = new Set(files.map(f => f.path.replace(/^(\.\/|\/)/, '').toLowerCase()));
+
+  const exists = (rel: string): boolean => {
+    const normalized = rel.replace(/^(\.\/|\/)/, '').toLowerCase();
+    if (knownPaths.has(normalized)) return true;
+    // Allow extension-less references
+    for (const ext of ['.tex', '.cls', '.sty', '.bib']) {
+      if (knownPaths.has(normalized + ext)) return true;
+    }
+    return false;
+  };
+
+  const stripComments = (s: string) => s.replace(/%(?![a-zA-Z])[^\n]*/g, '');
+
+  const content = stripComments(texContent);
+
+  // --- \documentclass{...} ---
+  const classRe = /\\documentclass(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = classRe.exec(content)) !== null) {
+    const cls = m[1].trim().replace(/\.cls$/, '');
+    const clsName = cls.split('/').pop() || cls;
+    const clsFile = `${cls}.cls`;
+    if (!exists(clsFile) && !BUILTIN_CLASSES.includes(clsName) && !knownPaths.has(clsFile.toLowerCase())) {
+      diagnostics.push({
+        severity: 'error',
+        file: mainPath,
+        line: lineAt(content, m.index),
+        message: `File '${clsFile}' not found. The document class '${cls}' must either be a built-in class or uploaded to the project (e.g. as a .cls file).`,
+      });
+    }
+  }
+
+  // --- \usepackage{...} / \RequirePackage ---
+  const pkgRe = /\\usepackage(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
+  while ((m = pkgRe.exec(content)) !== null) {
+    const pkgs = m[1].split(',').map(p => p.trim()).filter(Boolean);
+    for (const pkg of pkgs) {
+      if (pkg === 'minted') {
+        diagnostics.push({
+          severity: 'error',
+          file: mainPath,
+          line: lineAt(content, m.index),
+          message: `Package 'minted' requires Python/Pygments and --shell-escape, which the TeXForge engine does not support. Use the 'listings' package instead.`,
+        });
+        continue;
+      }
+      if (pkg === 'fontawesome5' || pkg === 'fontawesome') {
+        diagnostics.push({
+          severity: 'error',
+          file: mainPath,
+          line: lineAt(content, m.index),
+          message: `Package '${pkg}' ships its own fonts (FontAwesome) that are not bundled with TeXForge. Remove it or replace with standard symbols.`,
+        });
+        continue;
+      }
+      if (!KNOWN_PACKAGES.includes(pkg)) {
+        const styFile = `${pkg}.sty`;
+        if (!exists(styFile)) {
+          diagnostics.push({
+            severity: 'error',
+            file: mainPath,
+            line: lineAt(content, m.index),
+            message: `File '${styFile}' not found. Package '${pkg}' is not bundled with the TeXForge engine; upload it as a project file or remove the \\usepackage command.`,
+          });
+        }
+      }
+    }
+  }
+
+  // --- \input{...} / \include{...} ---
+  const inputRe = /\\(?:input|include)\s*\{([^}]+)\}/g;
+  while ((m = inputRe.exec(content)) !== null) {
+    const target = m[1].trim();
+    if (!exists(target)) {
+      diagnostics.push({
+        severity: 'error',
+        file: mainPath,
+        line: lineAt(content, m.index),
+        message: `File '${target}.tex' not found. The referenced input file must exist in the project.`,
+      });
+    }
+  }
+
+  // --- \includegraphics{...} ---
+  const imgRe = /\\includegraphics(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
+  while ((m = imgRe.exec(content)) !== null) {
+    const target = m[1].trim();
+    if (target.startsWith('http')) continue;
+    let found = false;
+    for (const ext of IMAGE_EXTENSIONS) {
+      if (exists(`${target}.${ext}`)) { found = true; break; }
+    }
+    if (!found && !exists(target)) {
+      diagnostics.push({
+        severity: 'error',
+        file: mainPath,
+        line: lineAt(content, m.index),
+        message: `File '${target}' not found. \\includegraphics references an image (${IMAGE_EXTENSIONS.join(', ')}) that is not in the project.`,
+      });
+    }
+  }
+
+  // --- \bibliography / \addbibresource ---
+  const bibRe = /\\(?:bibliography|addbibresource)\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
+  while ((m = bibRe.exec(content)) !== null) {
+    const targets = m[1].split(',').map(t => t.trim().replace(/\.bib$/, '')).filter(Boolean);
+    for (const target of targets) {
+      if (!exists(target)) {
+        diagnostics.push({
+          severity: 'error',
+          file: mainPath,
+          line: lineAt(content, m.index),
+          message: `File '${target}.bib' not found. The bibliography database must be uploaded to the project.`,
+        });
+      }
+    }
+  }
+
+  // --- \cite keys against .bib files (warning only) ---
+  const citeRe = /\\cite(?:\[[^\]]*\])?(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
+  const bibKeys = findBibCiteKeys(files);
+  if (bibKeys.size > 0) {
+    while ((m = citeRe.exec(content)) !== null) {
+      const keys = m[1].split(',').map(k => k.trim()).filter(Boolean);
+      for (const key of keys) {
+        if (!bibKeys.has(key)) {
+          diagnostics.push({
+            severity: 'warning',
+            file: mainPath,
+            line: lineAt(content, m.index),
+            message: `Citation '${key}' on page 1 undefined. No matching entry found in the .bib files.`,
+          });
+        }
+      }
+    }
+  }
+
+  // --- Unknown environments (excluding \newenvironment declarations) ---
+  const declaredEnvs = new Set<string>();
+  const newEnvRe = /\\newenvironment\*?\{([^}]+)\}/g;
+  while ((m = newEnvRe.exec(content)) !== null) declaredEnvs.add(m[1]);
+
+  const openEnvs: { name: string; line: number }[] = [];
+  const beginRe = /\\begin\s*\{([^}]+)\}/g;
+  while ((m = beginRe.exec(content)) !== null) {
+    openEnvs.push({ name: m[1], line: lineAt(content, m.index) });
+  }
+  for (const env of openEnvs) {
+    if (!KNOWN_ENVIRONMENTS.includes(env.name) && !declaredEnvs.has(env.name)) {
+      diagnostics.push({
+        severity: 'warning',
+        file: mainPath,
+        line: env.line,
+        message: `Environment '${env.name}' undefined. It is not built-in and was not declared with \\newenvironment.`,
+      });
+    }
+  }
+
+  return diagnostics;
+}
+
+// =============================================================
+// Word counting (Overleaf-style body word count)
+// =============================================================
+
+function countBodyWords(bodyContent: string): number {
+  let text = bodyContent;
+  // Drop full environments that should not be counted (figures, tables, equations)
+  text = text
+    .replace(/\\begin\{(figure|table|equation|align|gather|multline|verbatim|lstlisting|minted|code|algorithm|algorithmic)\*?\}[\s\S]*?\\end\{\1\*?\}/g, ' ')
+    .replace(/\$[^$]*\$/g, ' ')
+    .replace(/\\\[[\s\S]*?\\\]/g, ' ');
+  // Strip commands with arguments and bare commands
+  text = text
+    .replace(/\\[a-zA-Z]+\*?\[[^\]]*\]/g, ' ')
+    .replace(/\\[a-zA-Z]+\*?\{[^}]*\}/g, ' ')
+    .replace(/\\[a-zA-Z]+/g, ' ')
+    .replace(/\\[^a-zA-Z]/g, ' ')
+    .replace(/[{}\[\]]/g, ' ');
+  const words = text.split(/\s+/).filter(w => /[a-zA-Z0-9\u00C0-\u024F]/.test(w));
+  return words.length;
+}
+
+// =============================================================
+// PDF generation (paginated)
+// =============================================================
+
+const PAGE_WIDTH = 612;
+const PAGE_HEIGHT = 792;
+const MARGIN = 50;
+const BOTTOM_MARGIN = 40;
+const TOP_START = PAGE_HEIGHT - MARGIN;
+
 function sanitizeForPdf(str: string): string {
   if (!str) return '';
   return str
@@ -102,64 +393,105 @@ function chunkString(str: string, size: number): string[] {
   return chunks;
 }
 
+interface PageBuilder {
+  ops: string;
+  y: number;
+}
+
 /**
- * Generates a valid %PDF-1.4 binary file array buffer representing the compiled LaTeX document
+ * Generates a valid %PDF-1.4 binary with automatic pagination.
  */
 function createPdfBinary(
   title: string,
   author: string,
   sections: { title: string; content: string[] }[],
-  bibEntriesCount: number
+  bibEntriesCount: number,
+  wordCount: number
 ): ArrayBuffer {
-  let contentStream = `BT\n`;
-  contentStream += `/F2 18 Tf 50 740 Td (${sanitizeForPdf(title.slice(0, 60))}) Tj\n`;
+  const createPage = (): PageBuilder => ({ ops: '50 740 Td\n', y: 740 });
+  const pages: PageBuilder[] = [];
+  let current: PageBuilder = createPage();
+
+  // Writes an op at the current text position, then moves down by dy.
+  // Flows to a new page automatically when the bottom margin is reached.
+  // NOTE: a space is mandatory between operators and following numbers —
+  // "Tj0" merges into one token and strict viewers (Chrome pdfium) abort
+  // the whole content stream, leaving a blank white page.
+  const push = (op: string, dy: number) => {
+    current.y -= dy;
+    if (current.y < BOTTOM_MARGIN) {
+      pages.push(current);
+      current = createPage();
+    }
+    current.ops += op;
+    if (dy > 0) current.ops += ` 0 -${dy} Td\n`;
+  };
+
+  // Title block
+  push(`/F2 20 Tf (${sanitizeForPdf(title.slice(0, 60))}) Tj`, 22);
   if (author) {
-    contentStream += `/F1 11 Tf 0 -22 Td (${sanitizeForPdf(author.slice(0, 70))}) Tj\n`;
+    push(`/F1 11 Tf (${sanitizeForPdf(author.slice(0, 70))}) Tj`, 14);
   }
-  contentStream += `/F1 9 Tf 0 -16 Td (Compiled via TeXForge WebAssembly pdfTeX Engine - ${new Date().toLocaleDateString()}) Tj\n`;
-  contentStream += `0 -20 Td (____________________________________________________________________________) Tj\n`;
+  push(`/F1 9 Tf (Compiled via TeXForge Typesetter v1.0 - ${new Date().toLocaleDateString()}) Tj`, 12);
+  push(`/F1 9 Tf (${wordCount.toLocaleString()} words) Tj`, 12);
+  push(`/F1 9 Tf (____________________________________________________________________________) Tj`, 18);
 
-  contentStream += `0 -25 Td\n`;
-
+  // Sections
   for (const sec of sections) {
     if (sec.title) {
-      contentStream += `/F2 13 Tf 0 -22 Td (${sanitizeForPdf(sec.title.slice(0, 60))}) Tj\n`;
+      push(`/F2 13 Tf (${sanitizeForPdf(sec.title.slice(0, 60))}) Tj`, 22);
     }
     for (const paragraph of sec.content) {
-      const pLines = chunkString(paragraph, 72);
-      contentStream += `/F1 10 Tf\n`;
+      push(`/F1 10 Tf`, 0);
+      const pLines = chunkString(paragraph, 74);
+      let first = true;
       for (const pl of pLines) {
-        if (pl.trim().length > 0) {
-          contentStream += `0 -14 Td (${sanitizeForPdf(pl)}) Tj\n`;
-        }
+        if (!pl.trim().length) continue;
+        push(`(${sanitizeForPdf(pl)}) Tj`, first ? 14 : 14);
+        first = false;
       }
-      contentStream += `0 -6 Td () Tj\n`; // Paragraph spacing
+      push(`() Tj`, 8); // Paragraph spacing
     }
   }
 
+  // Bibliography note
   if (bibEntriesCount > 0) {
-    contentStream += `/F2 12 Tf 0 -24 Td (References) Tj\n`;
-    contentStream += `/F1 9 Tf 0 -14 Td (Document references synchronized - ${bibEntriesCount} bibliography entries loaded.) Tj\n`;
+    push(`/F2 12 Tf (References) Tj`, 24);
+    push(`/F1 9 Tf (Document references synchronized - ${bibEntriesCount} bibliography entries loaded.) Tj`, 14);
   }
 
-  contentStream += `ET\n`;
+  pages.push(current);
 
   const encoder = new TextEncoder();
-  const streamBytes = encoder.encode(contentStream);
 
+  // Build objects in strict ascending object-number order so the xref
+  // table offsets align with the real object numbers:
+  //   1 Catalog, 2 Pages, then per page (Page + Contents), then 2 fonts.
+  const pageCount = pages.length;
+  const fontBaseOffset = 3 + pageCount * 2;
   const objects: string[] = [];
-  // Obj 1: Catalog
   objects.push(`1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj`);
-  // Obj 2: Pages
-  objects.push(`2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj`);
-  // Obj 3: Page
-  objects.push(`3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>\nendobj`);
-  // Obj 4: Font Helvetica (Regular)
-  objects.push(`4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj`);
-  // Obj 5: Font Helvetica-Bold
-  objects.push(`5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>\nendobj`);
-  // Obj 6: Contents Stream
-  objects.push(`6 0 obj\n<< /Length ${streamBytes.length} >>\nstream\n${contentStream}\nendstream\nendobj`);
+
+  const kids = Array.from({ length: pageCount }, (_, i) => `${3 + i * 2} 0 R`).join(' ');
+  objects.push(`2 0 obj\n<< /Type /Pages /Kids [${kids}] /Count ${pageCount} >>\nendobj`);
+
+  // Pages + contents
+  pages.forEach((pg, i) => {
+    const pageObjNum = 3 + i * 2;
+    const contentObjNum = 4 + i * 2;
+    const stream = `BT\n${pg.ops}ET\n`;
+    const streamBytes = encoder.encode(stream);
+    objects.push(
+      `${pageObjNum} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 ${fontBaseOffset} 0 R /F2 ${fontBaseOffset + 1} 0 R >> >> /Contents ${contentObjNum} 0 R >>\nendobj`
+    );
+    objects.push(
+      `${contentObjNum} 0 obj\n<< /Length ${streamBytes.length} >>\nstream\n${stream}\nendstream\nendobj`
+    );
+  });
+
+  // Fonts (F1 = Helvetica, F2 = Helvetica-Bold)
+  objects.push(`${fontBaseOffset} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj`);
+  objects.push(`${fontBaseOffset + 1} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>\nendobj`);
 
   const headerBytes = encoder.encode(`%PDF-1.4\n`);
   const objBytes: Uint8Array[] = [];
@@ -199,9 +531,10 @@ function createPdfBinary(
   return pdfBuffer.buffer;
 }
 
-/**
- * Main compilation entry point
- */
+// =============================================================
+// Main compilation entry point
+// =============================================================
+
 export async function compileLatexProject(options: CompileOptions): Promise<CompilationResult> {
   const startTime = performance.now();
 
@@ -223,6 +556,7 @@ export async function compileLatexProject(options: CompileOptions): Promise<Comp
           message: 'Main LaTeX file could not be located in project files.',
         },
       ],
+      wordCount: 0,
       durationMs: Math.round(performance.now() - startTime),
       compiledAt: new Date().toISOString(),
     };
@@ -256,6 +590,11 @@ export async function compileLatexProject(options: CompileOptions): Promise<Comp
   if (docMatch) {
     bodyContent = docMatch[1];
   }
+
+  // Validate resources — this is what turns "silent demo output" into
+  // real Overleaf-style errors (missing .cls / .sty / images / .bib).
+  const diagnostics = validateResources(texContent, options.files, mainFile.path);
+  const hasResourceErrors = diagnostics.some(d => d.severity === 'error');
 
   const sections: { title: string; content: string[] }[] = [];
 
@@ -316,9 +655,12 @@ export async function compileLatexProject(options: CompileOptions): Promise<Comp
     });
   }
 
-  // Check syntax balance & generate .log file lines
+  // Word count
+  const wordCount = countBodyWords(bodyContent);
+
+  // Syntax balance check & generate .log file lines
   const rawLogLines: string[] = [];
-  rawLogLines.push(`This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2024 / TeXForge WASM)`);
+  rawLogLines.push(`This is TeXForge Typesetter v1.0 (parser-based engine, Overleaf-style diagnostics)`);
   rawLogLines.push(`(./${mainFile.path}`);
 
   // Strip comment lines for environment checking
@@ -330,7 +672,7 @@ export async function compileLatexProject(options: CompileOptions): Promise<Comp
     e.replace(/\\end\{|\}/g, '')
   );
 
-  let hasError = false;
+  let hasError = hasResourceErrors;
   if (openEnvs.length !== closeEnvs.length) {
     hasError = true;
     const lineCount = texContent.split('\n').length;
@@ -341,6 +683,12 @@ export async function compileLatexProject(options: CompileOptions): Promise<Comp
       )} ended by \\end{document}.`
     );
     rawLogLines.push(`l.${Math.max(1, lineCount - 2)} \\end{document}`);
+    diagnostics.push({
+      severity: 'error',
+      file: mainFile.path,
+      line: Math.max(1, lineCount - 2),
+      message: `\\begin{${openEnvs[openEnvs.length - 1] || 'document'}} ... \\end{document} environment mismatch.`,
+    });
   }
 
   // Count bib entries
@@ -359,14 +707,29 @@ export async function compileLatexProject(options: CompileOptions): Promise<Comp
     rawLogLines.push(`Database file #1 contains ${totalBibEntries} entries.`);
   }
 
-  rawLogLines.push(`Output written on ${mainFile.path.replace('.tex', '.pdf')} (1 page, 14201 bytes).`);
+  if (hasResourceErrors) {
+    for (const d of diagnostics) {
+      if (d.severity === 'error') {
+        rawLogLines.push(`! LaTeX Error: ${d.message}`);
+        if (d.line) rawLogLines.push(`l.${d.line}`);
+      } else if (d.severity === 'warning') {
+        rawLogLines.push(`LaTeX Warning: ${d.message}`);
+      }
+    }
+  }
+
+  // Generate binary PDF array buffer (paginated)
+  const pdfBuffer = createPdfBinary(title, author, sections, totalBibEntries, wordCount);
+  const pageEstimate = Math.max(1, Math.round((sections.reduce((a, s) => a + s.content.reduce((b, p) => b + p.length, 0), 0) + title.length) / 2200) || 1);
+
+  if (!hasResourceErrors) {
+    rawLogLines.push(`Output written on ${mainFile.path.replace('.tex', '.pdf')} (${pageEstimate} page${pageEstimate !== 1 ? 's' : ''}, ${pdfBuffer.byteLength} bytes).`);
+  } else {
+    rawLogLines.push(`! No pages of output.`);
+  }
   rawLogLines.push(`Transcript written on ${mainFile.path.replace('.tex', '.log')}.`);
 
   const fullLog = rawLogLines.join('\n');
-  const diagnostics = parseLatexLog(fullLog, options.files);
-
-  // Generate binary PDF array buffer
-  const pdfBuffer = createPdfBinary(title, author, sections, totalBibEntries);
   const blob = new Blob([pdfBuffer], { type: 'application/pdf' });
   const pdfDataUrl = URL.createObjectURL(blob);
 
@@ -376,8 +739,8 @@ export async function compileLatexProject(options: CompileOptions): Promise<Comp
     pdfArrayBuffer: pdfBuffer,
     log: fullLog,
     diagnostics,
+    wordCount,
     durationMs: Math.round(performance.now() - startTime),
     compiledAt: new Date().toISOString(),
   };
 }
-

@@ -55,6 +55,7 @@ export interface CompilationResult {
   diagnostics: CompileDiagnostic[];
   durationMs: number;
   compiledAt: string;
+  wordCount?: number;
 }
 
 export type AIProviderType = 'openai' | 'anthropic' | 'custom';

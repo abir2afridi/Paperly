@@ -285,6 +285,8 @@ export default function App() {
   const [activeFilePath, setActiveFilePath] = useState<string>('main.tex');
   const [isCompiling, setIsCompiling] = useState<boolean>(false);
   const [compilationResult, setCompilationResult] = useState<CompilationResult | null>(null);
+  const autoCompileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestCompileRef = useRef<() => void>(() => {});
 
   // ---- Cloud sync (Supabase) plumbing ----
   const guestSeedProjects = [seedProject1, seedProject2, seedProject3];
@@ -674,6 +676,7 @@ export default function App() {
   // Handle LaTeX Compilation
   const handleCompile = useCallback(async () => {
     setIsCompiling(true);
+    if (autoCompileTimerRef.current) clearTimeout(autoCompileTimerRef.current);
     try {
       const result = await compileLatexProject({
         mainFilePath: project.mainFile,
@@ -702,6 +705,15 @@ export default function App() {
       setIsCompiling(false);
     }
   }, [project]);
+
+  latestCompileRef.current = handleCompile;
+
+  // Cleanup pending auto-compile timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoCompileTimerRef.current) clearTimeout(autoCompileTimerRef.current);
+    };
+  }, []);
 
   // Auto-compile on initial mount
   useEffect(() => {
@@ -773,6 +785,14 @@ export default function App() {
       updatedAt: new Date().toISOString(),
       files: prev.files.map(f => (f.path === activeFilePath ? { ...f, content: newContent, sizeBytes: newContent.length } : f)),
     }));
+
+    // Auto-compile with debounce (Overleaf-style) when enabled
+    if (project.autoCompile && currentView === 'workspace') {
+      if (autoCompileTimerRef.current) clearTimeout(autoCompileTimerRef.current);
+      autoCompileTimerRef.current = setTimeout(() => {
+        latestCompileRef.current();
+      }, 2000);
+    }
   };
 
   // Create File
@@ -1333,6 +1353,11 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center space-x-2 font-mono text-slate-500 font-normal">
+                  {compilationResult?.wordCount !== undefined && (
+                    <span className="hidden md:inline text-[10px] bg-slate-200 px-1.5 py-0.5 rounded" title="Word count (LaTeX body)">
+                      {compilationResult.wordCount.toLocaleString()} words
+                    </span>
+                  )}
                   <span className="hidden sm:inline truncate">{activeFilePath}</span>
                   <div className="hidden sm:block h-3.5 w-px bg-slate-300" />
                   <button
@@ -1380,6 +1405,7 @@ export default function App() {
             <section className={`${isPdfPanelOpen ? 'flex' : 'hidden'} w-1/2 min-w-80 h-full relative shrink-0`}>
               <PdfViewer
                 pdfDataUrl={compilationResult?.pdfDataUrl || null}
+                diagnostics={compilationResult?.diagnostics || []}
                 annotations={annotations}
                 onAddAnnotation={ann => setAnnotations(prev => [...prev, { ...ann, id: `ann-${Date.now()}`, createdAt: new Date().toISOString() }])}
                 onSyncTexJump={() => {

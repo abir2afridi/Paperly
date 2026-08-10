@@ -12,11 +12,15 @@ import {
   MessageSquarePlus,
   Search,
   ExternalLink,
+  AlertTriangle,
+  FileText,
+  XCircle,
 } from 'lucide-react';
-import { PdfAnnotation } from '../types';
+import { PdfAnnotation, CompileDiagnostic } from '../types';
 
 interface PdfViewerProps {
   pdfDataUrl: string | null;
+  diagnostics?: CompileDiagnostic[];
   onSyncTexJump?: (lineNumber: number) => void;
   annotations: PdfAnnotation[];
   onAddAnnotation: (annotation: Omit<PdfAnnotation, 'id' | 'createdAt'>) => void;
@@ -24,6 +28,7 @@ interface PdfViewerProps {
 
 export const PdfViewer: React.FC<PdfViewerProps> = ({
   pdfDataUrl,
+  diagnostics = [],
   onSyncTexJump,
   annotations,
   onAddAnnotation,
@@ -238,12 +243,49 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
             )}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-center p-8 text-slate-500">
-            <ExternalLink className="w-10 h-10 text-slate-300 mb-3" />
-            <p className="font-semibold text-sm text-slate-700">No PDF Compiled Yet</p>
-            <p className="text-xs max-w-xs mt-1">
-              Click the <span className="font-semibold text-red-600">Compile</span> button above to trigger TeXForge typesetting.
-            </p>
+          <div className="flex flex-col items-center justify-center h-full text-center p-8 text-slate-500 max-w-lg mx-auto">
+            {diagnostics.length > 0 ? (
+              <>
+                <XCircle className="w-10 h-10 text-red-400 mb-3" />
+                <p className="font-semibold text-sm text-slate-700">Compilation Failed</p>
+                <p className="text-xs max-w-xs mt-1 mb-4">
+                  TeXForge encountered {diagnostics.length} error{diagnostics.length !== 1 ? 's' : ''} during typesetting.
+                </p>
+                <div className="w-full text-left space-y-1.5 max-h-64 overflow-y-auto">
+                  {diagnostics.slice(0, 10).map((d, i) => (
+                    <div key={i} className="bg-white border border-slate-200 p-2 rounded text-xs">
+                      <div className="flex items-center space-x-1.5">
+                        {d.severity === 'error' ? (
+                          <AlertTriangle className="w-3 h-3 text-red-500 shrink-0" />
+                        ) : (
+                          <AlertTriangle className="w-3 h-3 text-yellow-500 shrink-0" />
+                        )}
+                        <span className="font-mono font-bold text-slate-700">
+                          {d.file || 'main.tex'}{d.line ? `:${d.line}` : ''}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-slate-600 leading-relaxed">{d.message}</p>
+                    </div>
+                  ))}
+                  {diagnostics.length > 10 && (
+                    <p className="text-[10px] text-slate-400">
+                      +{diagnostics.length - 10} more — check the Terminal panel below.
+                    </p>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-4">
+                  Common causes: missing document class (.cls), unavailable packages, or font errors.
+                </p>
+              </>
+            ) : (
+              <>
+                <FileText className="w-10 h-10 text-slate-300 mb-3" />
+                <p className="font-semibold text-sm text-slate-700">No PDF Compiled Yet</p>
+                <p className="text-xs max-w-xs mt-1">
+                  Click the <span className="font-semibold text-red-600">Compile</span> button above to trigger TeXForge typesetting.
+                </p>
+              </>
+            )}
           </div>
         )}
       </div>

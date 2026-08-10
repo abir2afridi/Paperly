@@ -513,7 +513,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <div className="text-ink-muted-2 uppercase text-[10px] font-bold">TeX Compiler Engine</div>
               <div className="text-xs font-bold text-ink mt-2 flex items-center space-x-1">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>WASM pdfTeX Ready</span>
+                <span>Parser-based Engine Ready</span>
               </div>
             </div>
 

@@ -244,7 +244,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'chat-2',
       projectId: 'proj-1',
       authorName: 'Dr. Aris Thorne',
-      body: 'Great! The WASM pdfTeX compiler output looks crisp.',
+      body: 'Great! The parser-based compiler output looks crisp.',
       createdAt: new Date(Date.now() - 3600000).toISOString(),
     },
   ]);
@@ -266,7 +266,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       projectId: 'proj-1',
       actorName: 'TeXForge Compiler',
       type: 'COMPILE_SUCCESS',
-      description: 'compiled WASM pdfTeX in 342ms',
+      description: 'compiled with parser-based engine in 342ms',
       timestamp: new Date(Date.now() - 3600000 * 3).toISOString(),
     },
     {
