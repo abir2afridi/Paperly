@@ -5,7 +5,6 @@
  * shell and transparently falls back to web behavior otherwise, so the exact
  * same bundle serves both Web and Desktop.
  */
-import type { AIProviderConfig } from '../types';
 
 export function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -54,66 +53,6 @@ export function onMenuEvent(cb: (event: MenuEventPayload) => void): void {
       }
     });
   });
-}
-
-// ---- Provider persistence (replaces /api/ai/providers on desktop) ----
-
-export async function loadProvidersFile(): Promise<AIProviderConfig[]> {
-  if (!isTauri()) return [];
-  const { invoke } = await import('@tauri-apps/api/core');
-  const raw = await invoke<string>('read_providers_file').catch(() => '[]');
-  try {
-    return JSON.parse(raw) as AIProviderConfig[];
-  } catch {
-    return [];
-  }
-}
-
-export async function saveProvidersFile(providers: AIProviderConfig[]): Promise<void> {
-  if (!isTauri()) return;
-  const { invoke } = await import('@tauri-apps/api/core');
-  await invoke('write_providers_file', { json: JSON.stringify(providers) });
-}
-
-// ---- AI generation (replaces /api/ai/generate on desktop) ----
-
-export interface AiGenerateResult {
-  result: string;
-  providerModel?: string;
-}
-
-export async function aiGenerate(
-  providerId: string | undefined,
-  prompt: string,
-  context: string,
-): Promise<AiGenerateResult> {
-  if (isTauri()) {
-    const { invoke } = await import('@tauri-apps/api/core');
-    return invoke<AiGenerateResult>('ai_generate', { providerId, prompt, context });
-  }
-  const res = await fetch('/api/ai/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ providerId, prompt, context }),
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || 'AI generation failed.');
-  }
-  return { result: data.result, providerModel: data.providerModel };
-}
-
-export async function aiTestProvider(providerId: string): Promise<{ latencyMs: number; message: string }> {
-  if (isTauri()) {
-    const { invoke } = await import('@tauri-apps/api/core');
-    return invoke('ai_test_provider', { providerId });
-  }
-  const res = await fetch(`/api/ai/providers/${providerId}/test`, { method: 'POST' });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || 'Connection test failed.');
-  }
-  return { latencyMs: data.latencyMs, message: data.message };
 }
 
 // ---- File dialogs (replaces DOM <input>/<a> flows on desktop) ----

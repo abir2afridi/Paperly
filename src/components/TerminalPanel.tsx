@@ -16,6 +16,7 @@ import {
   Minimize2,
 } from 'lucide-react';
 import { CompilationResult, CompileDiagnostic } from '../types';
+import { summarizeCompilation } from '../services/terminalEngine';
 
 type FilterTab = 'all' | 'errors' | 'warnings' | 'raw';
 
@@ -53,9 +54,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
 
   const diagnostics = result?.diagnostics || [];
-  const errorCount = diagnostics.filter(d => d.severity === 'error').length;
-  const warningCount = diagnostics.filter(d => d.severity === 'warning').length;
-  const durationSeconds = result ? (result.durationMs / 1000).toFixed(2) + 's' : '--';
+  const { errorCount, warningCount, durationLabel } = summarizeCompilation(result);
 
   const filtered: CompileDiagnostic[] =
     activeTab === 'errors'
@@ -138,7 +137,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
           {/* Compilation Duration */}
           <span className="flex items-center space-x-1 text-[9px] font-black uppercase tracking-wider text-slate-500 font-mono">
             <Timer className="w-3 h-3" />
-            <span>Duration: {durationSeconds}</span>
+            <span>Duration: {durationLabel}</span>
           </span>
 
           {result && (

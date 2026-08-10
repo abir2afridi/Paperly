@@ -15,7 +15,7 @@ import {
   Send,
 } from 'lucide-react';
 import { CompileDiagnostic, AIProviderConfig } from '../types';
-import { aiGenerate } from '../desktop/bridge';
+import { aiGenerate } from '../services/aiEngine';
 
 interface ChatMessage {
   role: 'user' | 'assistant';

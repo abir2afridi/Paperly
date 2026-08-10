@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { AIProviderConfig } from '../types';
 import { THEMES, ThemeId, ThemeDefinition } from '../services/themeService';
-import { isTauri, aiTestProvider } from '../desktop/bridge';
+import { createProvider, deleteProvider, aiTestProvider } from '../services/aiEngine';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -68,34 +68,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setIsLoading(true);
 
     try {
-      let created: { id: string };
-
-      if (isTauri()) {
-        const { invoke } = await import('@tauri-apps/api/core');
-        created = await invoke<{ id: string }>('create_provider', {
-          input: { label, providerType, baseUrl, apiKey, model, isDefault },
-        });
-      } else {
-        const res = await fetch('/api/ai/providers', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            label,
-            providerType,
-            baseUrl,
-            apiKey,
-            model,
-            isDefault,
-          }),
-        });
-
-        if (!res.ok) {
-          throw new Error('Failed to create AI provider.');
-        }
-
-        created = await res.json();
-      }
-
+      const created = await createProvider({ label, providerType, baseUrl, apiKey, model, isDefault });
       onRefreshProviders();
       setIsAdding(false);
       setApiKey('');
@@ -124,12 +97,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleDeleteProvider = async (id: string) => {
-    if (isTauri()) {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('delete_provider', { id });
-    } else {
-      await fetch(`/api/ai/providers/${id}`, { method: 'DELETE' });
-    }
+    await deleteProvider(id);
     onRefreshProviders();
   };
 
