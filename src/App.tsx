@@ -35,10 +35,22 @@ import {
   fetchSnapshots,
   createSnapshotInDb,
   subscribeToProjectChanges,
+  saveFilesChecked,
+  fetchDrafts,
+  upsertDraft,
+  deleteDraft,
+  fetchNotifications,
+  createNotification,
+  markNotificationRead,
+  markAllNotificationsRead,
+  subscribeToNotifications,
+  fetchAccountExport,
 } from './services/db';
 import { getAvatarUrl } from './services/avatar';
 import { validateZipImport, sanitizeProjectFilePath, fileTypeFromPath } from './services/zipSecurity';
+import { downloadAccountArchive } from './services/accountExport';
 import { supabase } from './services/supabase';
+import { DraftRestoreModal } from './components/DraftRestoreModal';
 import {
   CollabSession,
   CollabStatus,
@@ -57,6 +69,8 @@ import {
   ActivityEvent,
   ProjectSnapshot,
   Template,
+  SaveStatus,
+  AppNotification,
 } from './types';
 import { WorkspaceView, WorkspaceMenuBridge } from './workspace/WorkspaceView';
 
@@ -387,22 +401,118 @@ export default function App() {
     };
   }, [currentUser?.id]);
 
-  // Autosave: persist changed files + project metadata to Supabase (debounced)
+  // ---- In-app notifications (§31): persisted + mark-as-read + realtime ----
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+
+  useEffect(() => {
+    if (!currentUser?.id) {
+      setNotifications([]);
+      return;
+    }
+    let cancelled = false;
+    fetchNotifications(currentUser.id).then(list => {
+      if (!cancelled && list) setNotifications(list);
+    });
+    const unsubscribe = subscribeToNotifications(currentUser.id, n =>
+      setNotifications(prev => (prev.some(x => x.id === n.id) ? prev : [n, ...prev]))
+    );
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [currentUser?.id]);
+
+  const notify = useCallback(
+    (n: { type: AppNotification['type']; title: string; body?: string; projectId?: string | null }) => {
+      if (!currentUser?.id) return;
+      createNotification({ userId: currentUser.id, type: n.type, title: n.title, body: n.body, projectId: n.projectId });
+    },
+    [currentUser?.id]
+  );
+
+  const handleAiTaskComplete = useCallback(
+    (summary: string) => {
+      notify({ type: 'ai_complete', title: 'AI generation complete', body: summary, projectId: project.id });
+    },
+    [notify, project.id]
+  );
+
+  const handleMarkNotificationRead = (notificationId: string) => {
+    setNotifications(prev => prev.map(n => (n.id === notificationId ? { ...n, isRead: true } : n)));
+    markNotificationRead(notificationId);
+  };
+
+  const handleMarkAllNotificationsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    if (currentUser?.id) markAllNotificationsRead(currentUser.id);
+  };
+
+  // ---- Account data export (§29): GDPR-style ZIP from Settings -> Privacy ----
+  const handleExportAccountData = useCallback(async (): Promise<boolean> => {
+    if (!currentUser?.id) return false;
+    try {
+      const data = await fetchAccountExport(currentUser.id);
+      if (!data) return false;
+      await downloadAccountArchive(data);
+      notify({ type: 'general', title: 'Account export ready', body: 'Your data archive has been downloaded.', projectId: null });
+      return true;
+    } catch (err) {
+      console.error('[export] account export failed:', err);
+      return false;
+    }
+  }, [currentUser?.id, notify]);
+
+  // Autosave / Draft system (§41):
+  // - Autosave ON: debounced persistence to project_files (interval configurable in Settings -> Editor)
+  // - Autosave OFF: edits go to the drafts table only; Ctrl/Cmd+S commits to the real file
+  // - Any failed save keeps content in the drafts table and retries
+  const AUTOSAVE_ENABLED_KEY = 'paperly.autosaveEnabled';
+  const AUTOSAVE_INTERVAL_KEY = 'paperly.autosaveIntervalMs';
+  const [autosaveEnabled, setAutosaveEnabled] = useState<boolean>(() => {
+    try {
+      const v = localStorage.getItem(AUTOSAVE_ENABLED_KEY);
+      return v !== null ? v === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+  const [autosaveIntervalMs, setAutosaveIntervalMs] = useState<number>(() => {
+    try {
+      const v = Number(localStorage.getItem(AUTOSAVE_INTERVAL_KEY));
+      return [2000, 5000, 10000, 30000].includes(v) ? v : 5000;
+    } catch {
+      return 5000;
+    }
+  });
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
+
   // Pending edits are flushed immediately on project switch / logout / tab close
   const pendingSaveRef = useRef<{ projectId: string; changed: ProjectFile[]; meta: { name: string; description: string; compiler: string; bib_tool: string; main_file: string; auto_compile: boolean; is_public: boolean } } | null>(null);
   const prevProjectIdRef = useRef<string | null>(null);
+  // Unsaved edits per file when autosave is OFF (path -> content), debounced to the drafts table
+  const dirtyDraftsRef = useRef<Map<string, string>>(new Map());
+  const draftFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const flushPendingSave = () => {
+  const flushDirtyDrafts = useCallback(async () => {
+    const entries = [...dirtyDraftsRef.current.entries()];
+    if (entries.length === 0) return;
+    dirtyDraftsRef.current.clear();
+    await Promise.all(entries.map(([path, content]) => upsertDraft(project.id, path, content)));
+  }, [project.id]);
+
+  const flushPendingSave = useCallback(() => {
     const pending = pendingSaveRef.current;
     if (!pending || pending.changed.length === 0) return;
     saveFiles(pending.projectId, pending.changed);
     pending.changed.forEach(f => savedFileContents.current.set(f.id, f.content || ''));
     pendingSaveRef.current = null;
-  };
+  }, []);
 
+  // Debounced real-file persistence (autosave ON) with save-status + failure retry
   useEffect(() => {
     if (!currentUser?.id) return;
-    pendingSaveRef.current = {
+    const pending = {
       projectId: project.id,
       changed: project.files.filter(f => savedFileContents.current.get(f.id) !== (f.content || '')),
       meta: {
@@ -415,16 +525,42 @@ export default function App() {
         is_public: project.isPublic,
       },
     };
+    pendingSaveRef.current = pending;
     const timer = setTimeout(async () => {
-      const pending = pendingSaveRef.current;
-      if (!pending) return;
-      if (pending.changed.length > 0) {
-        await saveFiles(pending.projectId, pending.changed);
-        pending.changed.forEach(f => savedFileContents.current.set(f.id, f.content || ''));
-      }
-      await updateProjectMeta(pending.projectId, pending.meta);
+      const p = pendingSaveRef.current;
+      if (!p) return;
       pendingSaveRef.current = null;
-    }, 1500);
+      try {
+        if (p.changed.length > 0) {
+          if (autosaveEnabled) {
+            setSaveStatus('saving');
+            const ok = await saveFilesChecked(p.projectId, p.changed);
+            if (ok) {
+              p.changed.forEach(f => savedFileContents.current.set(f.id, f.content || ''));
+              setSaveStatus('saved');
+            } else {
+              setSaveStatus('failed');
+              notify({ type: 'save_error', title: 'Save failed — kept as draft', body: `Changed files in "${p.projectId === project.id ? project.name : 'this project'}" could not be saved and will retry.`, projectId: p.projectId });
+              retryTimerRef.current = setTimeout(() => {
+                const again = pendingSaveRef.current;
+                if (again && again.changed.length > 0) {
+                  saveFiles(again.projectId, again.changed);
+                  again.changed.forEach(f => savedFileContents.current.set(f.id, f.content || ''));
+                  pendingSaveRef.current = null;
+                }
+                setSaveStatus('saved');
+              }, 5000);
+            }
+          } else {
+            await flushDirtyDrafts();
+          }
+        }
+        await updateProjectMeta(p.projectId, p.meta);
+      } catch {
+        setSaveStatus('failed');
+        notify({ type: 'save_error', title: 'Save failed — kept as draft', body: 'Unexpected error while saving. Changes are preserved and will retry.', projectId: p.projectId });
+      }
+    }, autosaveIntervalMs);
     return () => {
       clearTimeout(timer);
       const prevId = prevProjectIdRef.current;
@@ -433,12 +569,36 @@ export default function App() {
         flushPendingSave();
       }
     };
-  }, [project, currentUser?.id]);
+  }, [project, currentUser?.id, autosaveEnabled, autosaveIntervalMs, flushDirtyDrafts, notify]);
 
   useEffect(() => {
     window.addEventListener('beforeunload', flushPendingSave);
     return () => window.removeEventListener('beforeunload', flushPendingSave);
-  }, []);
+  }, [flushPendingSave]);
+
+  // Manual save (Ctrl/Cmd+S or Save button): commit draft content to the real file
+  const handleManualSave = useCallback(async () => {
+    if (!currentUser?.id) return;
+    const activeFile = project.files.find(f => f.path === activeFilePath);
+    if (!activeFile) return;
+    setSaveStatus('saving');
+    const ok = await saveFilesChecked(project.id, [activeFile]);
+    if (ok) {
+      savedFileContents.current.set(activeFile.id, activeFile.content || '');
+      dirtyDraftsRef.current.delete(activeFilePath);
+      await deleteDraft(project.id, activeFilePath);
+      setSaveStatus('saved');
+    } else {
+      dirtyDraftsRef.current.set(activeFilePath, activeFile.content || '');
+      await flushDirtyDrafts();
+      setSaveStatus('failed');
+      notify({ type: 'save_error', title: 'Save failed — kept as draft', body: `${activeFilePath} could not be saved. Your changes are safe in the draft and will retry.`, projectId: project.id });
+      retryTimerRef.current = setTimeout(() => {
+        saveFiles(project.id, [activeFile]);
+        setSaveStatus('saved');
+      }, 5000);
+    }
+  }, [currentUser?.id, project, activeFilePath, flushDirtyDrafts, notify]);
 
   // Load project-bound collaboration data (chat, activity, comments, snapshots)
   useEffect(() => {
@@ -651,6 +811,18 @@ export default function App() {
       files: prev.files.map(f => (f.path === activeFilePath ? { ...f, content: newContent, sizeBytes: newContent.length } : f)),
     }));
 
+    // Autosave OFF -> edits live only in the drafts table until a manual save
+    if (!autosaveEnabled) {
+      dirtyDraftsRef.current.set(activeFilePath, newContent);
+      setSaveStatus('draft');
+      if (draftFlushTimerRef.current) clearTimeout(draftFlushTimerRef.current);
+      draftFlushTimerRef.current = setTimeout(() => {
+        flushDirtyDrafts();
+      }, 400);
+    } else {
+      setSaveStatus('saving');
+    }
+
     // Auto-compile with debounce (Overleaf-style) when enabled
     if (project.autoCompile && currentView === 'workspace') {
       if (autoCompileTimerRef.current) clearTimeout(autoCompileTimerRef.current);
@@ -676,6 +848,46 @@ export default function App() {
   useEffect(() => {
     handleFileContentChangeRef.current = handleFileContentChange;
   }, [handleFileContentChange]);
+
+  // Draft restore prompt (§41): reopening a file with a newer draft than the last save
+  const [restoreDraft, setRestoreDraft] = useState<{ filePath: string; content: string; updatedAt: string } | null>(null);
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    let cancelled = false;
+    (async () => {
+      const drafts = await fetchDrafts(project.id);
+      if (cancelled || !drafts) return;
+      const draft = drafts.find(
+        d => d.file_path === activeFilePath && new Date(d.updated_at).getTime() > new Date(project.files.find(f => f.path === d.file_path)?.updatedAt ?? 0).getTime()
+      );
+      if (draft) {
+        setRestoreDraft({ filePath: draft.file_path, content: draft.content, updatedAt: draft.updated_at });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id, project.id, activeFilePath]);
+
+  const handleRestoreDraft = () => {
+    if (!restoreDraft) return;
+    setProject(prev => ({
+      ...prev,
+      files: prev.files.map(f => (f.path === restoreDraft.filePath ? { ...f, content: restoreDraft.content } : f)),
+    }));
+    setSaveStatus(autosaveEnabled ? 'saving' : 'draft');
+    dirtyDraftsRef.current.set(restoreDraft.filePath, restoreDraft.content);
+    setRestoreDraft(null);
+  };
+
+  const handleDiscardDraft = () => {
+    if (!restoreDraft) return;
+    const { filePath } = restoreDraft;
+    dirtyDraftsRef.current.delete(filePath);
+    deleteDraft(project.id, filePath);
+    setRestoreDraft(null);
+  };
 
   useEffect(() => {
     collabSession?.destroy();
@@ -1264,6 +1476,12 @@ export default function App() {
           snapshots={snapshots}
           onCreateSnapshot={handleCreateSnapshot}
           onRestoreSnapshot={handleRestoreSnapshot}
+          saveStatus={saveStatus}
+          onManualSave={handleManualSave}
+          notifications={notifications}
+          onMarkNotificationRead={handleMarkNotificationRead}
+          onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+          onAiTaskComplete={handleAiTaskComplete}
           menuBridgeRef={workspaceMenuBridgeRef}
         />
       )}
@@ -1276,6 +1494,34 @@ export default function App() {
         onRefreshProviders={refreshProviders}
         activeThemeId={activeThemeId}
         onSelectTheme={setActiveThemeId}
+        autosaveEnabled={autosaveEnabled}
+        autosaveIntervalMs={autosaveIntervalMs}
+        onChangeAutosave={enabled => {
+          setAutosaveEnabled(enabled);
+          try {
+            localStorage.setItem(AUTOSAVE_ENABLED_KEY, String(enabled));
+          } catch {
+            /* ignore */
+          }
+        }}
+        onChangeAutosaveInterval={ms => {
+          setAutosaveIntervalMs(ms);
+          try {
+            localStorage.setItem(AUTOSAVE_INTERVAL_KEY, String(ms));
+          } catch {
+            /* ignore */
+          }
+        }}
+        onExportAccountData={handleExportAccountData}
+      />
+
+      {/* Unsaved-draft restore prompt (§41) */}
+      <DraftRestoreModal
+        isOpen={restoreDraft !== null}
+        filePath={restoreDraft?.filePath ?? ''}
+        draftUpdatedAt={restoreDraft?.updatedAt ?? null}
+        onRestore={handleRestoreDraft}
+        onDiscard={handleDiscardDraft}
       />
 
       {/* Auth Page for Login & Signup */}

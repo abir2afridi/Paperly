@@ -21,8 +21,15 @@ import {
   Moon,
   Home,
   Keyboard,
+  Bell,
+  CheckCheck,
+  Sparkle,
+  AlertTriangle,
+  MessageSquareText,
+  Mail,
+  FileWarning,
 } from 'lucide-react';
-import { Project, CompilationResult } from '../types';
+import { Project, CompilationResult, AppNotification } from '../types';
 
 interface NavbarProps {
   project: Project;
@@ -48,6 +55,9 @@ interface NavbarProps {
   onImportZip: () => void;
   onNewProject: () => void;
   onGoHome?: () => void;
+  notifications?: AppNotification[];
+  onMarkNotificationRead?: (id: string) => void;
+  onMarkAllNotificationsRead?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -74,9 +84,31 @@ export const Navbar: React.FC<NavbarProps> = ({
   onImportZip,
   onNewProject,
   onGoHome,
+  notifications,
+  onMarkNotificationRead,
+  onMarkAllNotificationsRead,
 }) => {
   const [isEditingName, setIsEditingName] = React.useState(false);
   const [nameInput, setNameInput] = React.useState(project.name);
+  const [isNotificationsOpen, setIsNotificationsOpen] = React.useState(false);
+
+  const unreadCount = notifications?.filter(n => !n.isRead).length ?? 0;
+
+  const notificationIcon = (type: AppNotification['type']) => {
+    switch (type) {
+      case 'ai_complete':
+        return <Sparkle className="w-3.5 h-3.5 text-violet-600" />;
+      case 'save_error':
+        return <FileWarning className="w-3.5 h-3.5 text-rose-600" />;
+      case 'mention':
+        return <MessageSquareText className="w-3.5 h-3.5 text-blue-600" />;
+      case 'invite':
+      case 'review_request':
+        return <Mail className="w-3.5 h-3.5 text-amber-600" />;
+      default:
+        return <AlertTriangle className="w-3.5 h-3.5 text-slate-500" />;
+    }
+  };
 
   React.useEffect(() => {
     setNameInput(project.name);
@@ -296,6 +328,76 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Keyboard className="w-4 h-4 text-slate-700" />
           </button>
+        )}
+
+        {notifications && (
+          <div className="relative">
+            <button
+              onClick={() => setIsNotificationsOpen(prev => !prev)}
+              className="relative p-1.5 text-slate-600 hover:text-[#D11111] hover:bg-red-50 transition-colors border border-transparent hover:border-red-200"
+              title="Notifications"
+            >
+              <Bell className="w-4 h-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-0.5 bg-[#D11111] text-white text-[9px] font-black rounded-full flex items-center justify-center">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </button>
+
+            {isNotificationsOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setIsNotificationsOpen(false)} />
+                <div className="absolute right-0 top-9 z-40 w-80 bg-white border-2 border-slate-300 shadow-2xl">
+                  <div className="flex items-center justify-between px-3 py-2 border-b-2 border-slate-200 bg-slate-50">
+                    <span className="font-black uppercase tracking-wider text-[10px] text-slate-800">
+                      Notifications{unreadCount > 0 ? ` (${unreadCount} new)` : ''}
+                    </span>
+                    <button
+                      onClick={() => {
+                        onMarkAllNotificationsRead?.();
+                        setIsNotificationsOpen(false);
+                      }}
+                      className="flex items-center space-x-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-[#D11111]"
+                      title="Mark all as read"
+                    >
+                      <CheckCheck className="w-3.5 h-3.5" />
+                      <span>Mark all read</span>
+                    </button>
+                  </div>
+
+                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                    {notifications.length === 0 && (
+                      <div className="p-6 text-center text-slate-400 text-[11px] font-mono">
+                        No notifications yet.
+                      </div>
+                    )}
+                    {notifications.map(n => (
+                      <button
+                        key={n.id}
+                        onClick={() => {
+                          if (!n.isRead) onMarkNotificationRead?.(n.id);
+                        }}
+                        className={`w-full flex items-start space-x-2.5 px-3 py-2.5 text-left hover:bg-slate-50 transition-colors ${
+                          n.isRead ? 'opacity-60' : ''
+                        }`}
+                      >
+                        <span className="mt-0.5 shrink-0">{notificationIcon(n.type)}</span>
+                        <span className="min-w-0">
+                          <span className="block text-[11px] font-bold text-slate-800 truncate">{n.title}</span>
+                          {n.body && <span className="block text-[10px] text-slate-500 leading-snug truncate">{n.body}</span>}
+                          <span className="block text-[9px] text-slate-400 font-mono mt-0.5">
+                            {new Date(n.createdAt).toLocaleString()}
+                          </span>
+                        </span>
+                        {!n.isRead && <span className="ml-auto mt-1.5 w-2 h-2 rounded-full bg-[#D11111] shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         )}
 
         <button

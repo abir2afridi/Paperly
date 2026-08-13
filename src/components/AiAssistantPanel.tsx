@@ -30,6 +30,7 @@ interface AiAssistantPanelProps {
   onApplyFix: (newContent: string) => void;
   providers: AIProviderConfig[];
   onOpenSettings: () => void;
+  onTaskComplete?: (summary: string) => void;
 }
 
 export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
@@ -40,6 +41,7 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
   onApplyFix,
   providers,
   onOpenSettings,
+  onTaskComplete,
 }) => {
   const [selectedProviderId, setSelectedProviderId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'explain' | 'fix' | 'rewrite' | 'abstract'>('explain');
@@ -78,6 +80,7 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
     try {
       const data = await aiGenerate(activeProvider?.id, question, activeFileContent);
       setChatMessages(prev => [...prev, { role: 'assistant', content: data.result }]);
+      onTaskComplete?.(data.result.replace(/\s+/g, ' ').trim().slice(0, 120));
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMsg(msg);
@@ -114,6 +117,7 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
     try {
       const data = await aiGenerate(activeProvider?.id, prompt, context);
       setAiResult(data.result);
+      onTaskComplete?.(data.result.replace(/\s+/g, ' ').trim().slice(0, 120));
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMsg(msg);

@@ -17,6 +17,7 @@ import {
   Check,
   Sun,
   Moon,
+  Download,
 } from 'lucide-react';
 import { AIProviderConfig } from '../types';
 import { THEMES, ThemeId, ThemeDefinition } from '../services/themeService';
@@ -29,6 +30,11 @@ interface SettingsModalProps {
   onRefreshProviders: () => void;
   activeThemeId: ThemeId;
   onSelectTheme: (themeId: ThemeId) => void;
+  autosaveEnabled: boolean;
+  autosaveIntervalMs: number;
+  onChangeAutosave: (enabled: boolean) => void;
+  onChangeAutosaveInterval: (ms: number) => void;
+  onExportAccountData?: () => Promise<boolean>;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -38,8 +44,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onRefreshProviders,
   activeThemeId,
   onSelectTheme,
+  autosaveEnabled,
+  autosaveIntervalMs,
+  onChangeAutosave,
+  onChangeAutosaveInterval,
+  onExportAccountData,
 }) => {
-  const [activeTab, setActiveTab] = useState<'ai' | 'appearance' | 'shortcuts' | 'sessions'>('ai');
+  const [activeTab, setActiveTab] = useState<'ai' | 'appearance' | 'shortcuts' | 'sessions' | 'editor' | 'privacy'>('ai');
 
   // New Provider Form State
   const [isAdding, setIsAdding] = useState(false);
@@ -52,6 +63,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const [isLoading, setIsLoading] = useState(false);
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; msg: string }>>({});
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportDone, setExportDone] = useState(false);
+
+  const handleExportAccountData = async () => {
+    if (!onExportAccountData) return;
+    setIsExporting(true);
+    setExportDone(false);
+    const ok = await onExportAccountData();
+    setIsExporting(false);
+    setExportDone(ok);
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -141,6 +163,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             }`}
           >
             Shortcuts
+          </button>
+          <button
+            onClick={() => setActiveTab('editor')}
+            className={`px-4 py-2.5 transition-colors whitespace-nowrap ${
+              activeTab === 'editor' ? 'bg-white text-[#D11111] border-b-2 border-[#D11111] font-black' : 'hover:bg-slate-200'
+            }`}
+          >
+            Editor
+          </button>
+          <button
+            onClick={() => setActiveTab('privacy')}
+            className={`px-4 py-2.5 transition-colors whitespace-nowrap ${
+              activeTab === 'privacy' ? 'bg-white text-[#D11111] border-b-2 border-[#D11111] font-black' : 'hover:bg-slate-200'
+            }`}
+          >
+            Privacy
           </button>
           <button
             onClick={() => setActiveTab('sessions')}
@@ -420,6 +458,96 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
                 <span className="bg-emerald-100 text-emerald-800 font-bold text-[10px] px-2 py-0.5 border border-emerald-300 uppercase tracking-wider">Active</span>
               </div>
+            </div>
+          )}
+
+{activeTab === 'editor' && (
+            <div className="space-y-4">
+              <h4 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">Editor</h4>
+
+              <div className="flex items-center justify-between p-3 bg-slate-50 border-2 border-slate-200">
+                <div>
+                  <span className="font-bold text-slate-900">Autosave</span>
+                  <p className="text-slate-500 font-mono text-[11px]">
+                    {autosaveEnabled
+                      ? 'On — edits are persisted to your project file after you stop typing.'
+                      : 'Off — edits are kept as drafts until you press Ctrl/Cmd+S.'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => onChangeAutosave(!autosaveEnabled)}
+                  className={`relative w-14 h-7 rounded-full transition-colors ${
+                    autosaveEnabled ? 'bg-[#D11111]' : 'bg-slate-300'
+                  }`}
+                  title={autosaveEnabled ? 'Turn autosave off' : 'Turn autosave on'}
+                >
+                  <span
+                    className={`absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-all ${
+                      autosaveEnabled ? 'left-7' : 'left-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div>
+                <span className="block font-bold text-slate-800 uppercase tracking-wider text-[10px] mb-2">Save interval (debounce)</span>
+                <div className="flex flex-wrap gap-2">
+                  {[2000, 5000, 10000, 30000].map(ms => (
+                    <button
+                      key={ms}
+                      onClick={() => onChangeAutosaveInterval(ms)}
+                      className={`px-3 py-1.5 border-2 font-bold uppercase tracking-wider text-[10px] transition-colors ${
+                        autosaveIntervalMs === ms
+                          ? 'bg-[#D11111] text-white border-red-800'
+                          : 'bg-white text-slate-700 border-slate-300 hover:border-slate-500'
+                      }`}
+                    >
+                      {ms / 1000}s
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'privacy' && (
+            <div className="space-y-3">
+              <h4 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">Privacy & Data Portability</h4>
+              <p className="text-slate-500 font-mono text-[11px] leading-relaxed">
+                Download a GDPR-style archive of everything we store for your account: profile, projects
+                and their files, comments, chat, activity, snapshots, PDF annotations, drafts and
+                notifications. The ZIP is a standard LaTeX project — it compiles with plain{' '}
+                <code className="bg-slate-100 px-1">pdflatex</code> outside Paperly.
+              </p>
+              <div className="p-3 bg-slate-50 border-2 border-slate-200 flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-slate-900">Export my data</span>
+                  <p className="text-slate-500 font-mono text-[11px]">Prepared on demand, downloads as a ZIP archive.</p>
+                </div>
+                <button
+                  onClick={handleExportAccountData}
+                  disabled={isExporting || !onExportAccountData}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#D11111] text-white font-black uppercase tracking-wider text-[11px] hover:bg-black disabled:opacity-50 border border-red-800"
+                >
+                  {isExporting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Preparing…</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download everything</span>
+                    </>
+                  )}
+                </button>
+              </div>
+              {exportDone && (
+                <div className="flex items-center space-x-2 p-2.5 bg-emerald-50 border-2 border-emerald-300 text-emerald-800 font-bold text-[11px]">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Archive downloaded. It opens as a plain LaTeX project.</span>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -41,6 +41,8 @@ import {
   ActivityEvent,
   ProjectSnapshot,
   Template,
+  SaveStatus,
+  AppNotification,
 } from '../types';
 import { AuthUser } from '../components/AuthPage';
 import { ThemeDefinition } from '../services/themeService';
@@ -93,6 +95,12 @@ interface WorkspaceViewProps {
   snapshots: ProjectSnapshot[];
   onCreateSnapshot: (title: string) => void;
   onRestoreSnapshot: (snapshot: ProjectSnapshot) => void;
+  saveStatus: SaveStatus;
+  onManualSave: () => void;
+  notifications: AppNotification[];
+  onMarkNotificationRead: (id: string) => void;
+  onMarkAllNotificationsRead: () => void;
+  onAiTaskComplete: (summary: string) => void;
   menuBridgeRef: React.MutableRefObject<WorkspaceMenuBridge | null>;
 }
 
@@ -138,6 +146,12 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
   snapshots,
   onCreateSnapshot,
   onRestoreSnapshot,
+  saveStatus,
+  onManualSave,
+  notifications,
+  onMarkNotificationRead,
+  onMarkAllNotificationsRead,
+  onAiTaskComplete,
   menuBridgeRef,
 }) => {
   // Editor Mode State (Code vs Visual AST)
@@ -303,6 +317,11 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
         e.preventDefault();
         onCompile();
       }
+      // Cmd/Ctrl + S -> Manual save (commit draft to the real file)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        onManualSave();
+      }
       // Cmd/Ctrl + M -> Math Palette
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm') {
         e.preventDefault();
@@ -346,7 +365,7 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onCompile]);
+  }, [onCompile, onManualSave]);
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-white text-slate-900 font-sans">
@@ -375,6 +394,9 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
         onImportZip={onImportZip}
         onNewProject={onNewProject}
         onGoHome={onGoHome}
+        notifications={notifications}
+        onMarkNotificationRead={onMarkNotificationRead}
+        onMarkAllNotificationsRead={onMarkAllNotificationsRead}
       />
 
       {/* Main Split Workspace */}
@@ -446,6 +468,36 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
                 </span>
               )}
               <span className="hidden sm:inline truncate">{activeFilePath}</span>
+              <span
+                className={`hidden lg:inline-flex items-center text-[10px] px-1.5 py-0.5 rounded border ${
+                  saveStatus === 'saved'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : saveStatus === 'saving'
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : saveStatus === 'draft'
+                    ? 'bg-amber-100 text-amber-800 border-amber-300'
+                    : 'bg-rose-50 text-rose-700 border-rose-200'
+                }`}
+                title="Save state"
+              >
+                {saveStatus === 'saved' ? (
+                  'Saved'
+                ) : saveStatus === 'saving' ? (
+                  'Saving…'
+                ) : saveStatus === 'draft' ? (
+                  'Draft (unsaved)'
+                ) : (
+                  'Save failed — retrying'
+                )}
+              </span>
+              <button
+                onClick={onManualSave}
+                disabled={saveStatus === 'saved'}
+                className="hidden sm:inline-flex items-center text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 border-2 border-slate-300 text-slate-600 hover:border-[#D11111] hover:text-[#D11111] disabled:opacity-40 disabled:pointer-events-none"
+                title="Save file now (Ctrl/Cmd+S)"
+              >
+                Save
+              </button>
               {collab && (
                 <div className="hidden md:flex items-center gap-1.5">
                   <span
@@ -550,6 +602,7 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
             setIsAiPanelOpen(false);
             setTimeout(() => onCompile(), 100);
           }}
+          onTaskComplete={onAiTaskComplete}
           providers={providers}
           onOpenSettings={() => {
             setIsAiPanelOpen(false);

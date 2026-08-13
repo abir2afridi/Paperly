@@ -102,3 +102,23 @@ export interface PdfAnnotationRow {
   color: string;
   created_at: string;
 }
+
+export interface DraftRow {
+  id: string;
+  project_id: string;
+  file_path: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NotificationRow {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  type: string;
+  title: string;
+  body: string;
+  is_read: boolean;
+  created_at: string;
+}

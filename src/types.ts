@@ -131,6 +131,18 @@ export interface ProjectSnapshot {
   files: { path: string; content: string }[];
 }
 
+export type SaveStatus = 'saving' | 'saved' | 'draft' | 'failed';
+
+export interface AppNotification {
+  id: string;
+  type: 'mention' | 'comment' | 'ai_complete' | 'save_error' | 'invite' | 'review_request' | 'general';
+  title: string;
+  body: string;
+  projectId: string | null;
+  isRead: boolean;
+  createdAt: string;
+}
+
 export interface PdfAnnotation {
   id: string;
   projectId: string;

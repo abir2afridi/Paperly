@@ -9,6 +9,7 @@ import { createClient } from '@supabase/supabase-js';
 import { setContentInitializor, setupWSConnection } from '@y/websocket-server/utils';
 import { sanitizeProjectFilePath } from './src/services/zipSecurity';
 import { createRateLimiter, clientIp } from './src/services/rateLimit';
+import { renderEmailTemplate, sendEmailViaResend } from './src/services/emailTemplates';
 import 'dotenv/config';
 
 const app = express();
@@ -122,6 +123,63 @@ loadProviders();
 // Healthcheck
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', app: 'TeXForge', timestamp: new Date().toISOString() });
+});
+
+// POST /api/email/notify - transactional email for mentions/invites/review
+// requests (§31). Respects the recipient's per-user email preference. Requires
+// RESEND_API_KEY; returns 501 when email delivery is not configured.
+app.post('/api/email/notify', async (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  if (!token) return res.status(401).json({ error: 'Missing authorization token.' });
+
+  const sb = createClient(process.env.VITE_SUPABASE_URL || '', process.env.VITE_SUPABASE_ANON_KEY || '', {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: userData, error: userError } = await sb.auth.getUser();
+  if (userError || !userData.user) return res.status(401).json({ error: 'Invalid session token.' });
+
+  const recipientId = req.body.recipientId as string | undefined;
+  if (!recipientId) return res.status(400).json({ error: 'recipientId is required.' });
+
+  const { data: profile } = await sb
+    .from('profiles')
+    .select('email, email_notifications')
+    .eq('id', recipientId)
+    .maybeSingle();
+  if (!profile?.email) return res.status(404).json({ error: 'Recipient not found.' });
+  if (profile.email_notifications === false) {
+    return res.json({ delivered: false, reason: 'email_notifications_disabled' });
+  }
+
+  const { type, data } = req.body as { type: string; data: Record<string, string> };
+  if (type !== 'mention' && type !== 'invite' && type !== 'review_request') {
+    return res.status(400).json({ error: 'Unsupported email template type.' });
+  }
+  const template = renderEmailTemplate(type, data);
+
+  if (!process.env.RESEND_API_KEY) {
+    return res.status(501).json({ error: 'Email delivery is not configured (RESEND_API_KEY missing).' });
+  }
+
+  try {
+    const response = await sendEmailViaResend({
+      apiKey: process.env.RESEND_API_KEY,
+      from: process.env.EMAIL_FROM || 'Paperly <notifications@paperly.app>',
+      to: profile.email,
+      template,
+    });
+    if (!response.ok) {
+      const detail = await response.text();
+      console.error('[email] Resend delivery failed:', response.status, detail);
+      return res.status(502).json({ error: 'Email provider rejected the request.' });
+    }
+    return res.json({ delivered: true });
+  } catch (err) {
+    console.error('[email] Delivery error:', err);
+    return res.status(502).json({ error: 'Email delivery failed.' });
+  }
 });
 
 // GET AI Providers

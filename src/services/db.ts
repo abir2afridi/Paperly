@@ -9,8 +9,20 @@ import {
   CommentRow,
   SnapshotRow,
   PdfAnnotationRow,
+  DraftRow,
+  NotificationRow,
 } from './supabase';
-import { Project, ProjectFile, CodeComment, ChatMessage, ActivityEvent, ProjectSnapshot, PdfAnnotation } from '../types';
+import {
+  Project,
+  ProjectFile,
+  CodeComment,
+  ChatMessage,
+  ActivityEvent,
+  ProjectSnapshot,
+  PdfAnnotation,
+  AppNotification,
+} from '../types';
+import { AccountExportData } from './accountExport';
 
 export const isDatabaseAvailable = (): boolean => supabase !== null;
 
@@ -225,7 +237,11 @@ export async function deleteProjectFromDb(projectId: string): Promise<boolean> {
 // =============================================================
 
 export async function saveFiles(projectId: string, files: ProjectFile[]): Promise<void> {
-  if (!supabase || files.length === 0) return;
+  await saveFilesChecked(projectId, files);
+}
+
+export async function saveFilesChecked(projectId: string, files: ProjectFile[]): Promise<boolean> {
+  if (!supabase || files.length === 0) return true;
   const rows = files.map(f => ({
     project_id: projectId,
     path: f.path,
@@ -234,7 +250,11 @@ export async function saveFiles(projectId: string, files: ProjectFile[]): Promis
     size_bytes: f.sizeBytes,
   }));
   const { error } = await supabase.from('project_files').upsert(rows, { onConflict: 'project_id,path' });
-  if (error) console.error('[db] saveFiles failed:', error.message);
+  if (error) {
+    console.error('[db] saveFiles failed:', error.message);
+    return false;
+  }
+  return true;
 }
 
 export async function deleteFileFromDb(projectId: string, path: string): Promise<void> {
@@ -483,6 +503,202 @@ function rowToAnnotation(r: PdfAnnotationRow): PdfAnnotation {
     text: r.text,
     color: r.color,
     createdAt: r.created_at,
+  };
+}
+
+// =============================================================
+// Drafts / Autosave (plan §41)
+// =============================================================
+
+export async function fetchDrafts(projectId: string): Promise<DraftRow[] | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.from('drafts').select('*').eq('project_id', projectId);
+  if (error) {
+    console.error('[db] fetchDrafts failed:', error.message);
+    return null;
+  }
+  return data as DraftRow[];
+}
+
+export async function upsertDraft(projectId: string, filePath: string, content: string): Promise<void> {
+  if (!supabase) return;
+  const { error } = await supabase
+    .from('drafts')
+    .upsert({ project_id: projectId, file_path: filePath, content }, { onConflict: 'project_id,file_path' });
+  if (error) console.error('[db] upsertDraft failed:', error.message);
+}
+
+export async function deleteDraft(projectId: string, filePath: string): Promise<void> {
+  if (!supabase) return;
+  const { error } = await supabase
+    .from('drafts')
+    .delete()
+    .eq('project_id', projectId)
+    .eq('file_path', filePath);
+  if (error) console.error('[db] deleteDraft failed:', error.message);
+}
+
+// =============================================================
+// Notifications (plan §31)
+// =============================================================
+
+export type NotificationType = AppNotification['type'];
+
+export async function fetchNotifications(userId: string): Promise<AppNotification[] | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (error) {
+    console.error('[db] fetchNotifications failed:', error.message);
+    return null;
+  }
+  return (data as NotificationRow[]).map(rowToNotification);
+}
+
+export async function createNotification(input: {
+  userId: string;
+  projectId?: string | null;
+  type: NotificationType;
+  title: string;
+  body?: string;
+}): Promise<AppNotification | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('notifications')
+    .insert({
+      user_id: input.userId,
+      project_id: input.projectId ?? null,
+      type: input.type,
+      title: input.title,
+      body: input.body ?? '',
+    })
+    .select()
+    .single();
+  if (error) {
+    console.error('[db] createNotification failed:', error.message);
+    return null;
+  }
+  return rowToNotification(data as NotificationRow);
+}
+
+export async function markNotificationRead(notificationId: string): Promise<void> {
+  if (!supabase) return;
+  const { error } = await supabase.from('notifications').update({ is_read: true }).eq('id', notificationId);
+  if (error) console.error('[db] markNotificationRead failed:', error.message);
+}
+
+export async function markAllNotificationsRead(userId: string): Promise<void> {
+  if (!supabase) return;
+  const { error } = await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .eq('user_id', userId)
+    .eq('is_read', false);
+  if (error) console.error('[db] markAllNotificationsRead failed:', error.message);
+}
+
+export function subscribeToNotifications(userId: string, onNotification: (n: AppNotification) => void): () => void {
+  if (!supabase) return () => {};
+  const channel = supabase
+    .channel(`notifications-${userId}`)
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+      payload => onNotification(rowToNotification(payload.new as NotificationRow))
+    )
+    .subscribe();
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
+
+function rowToNotification(r: NotificationRow): AppNotification {
+  return {
+    id: r.id,
+    type: r.type as AppNotification['type'],
+    title: r.title,
+    body: r.body,
+    projectId: r.project_id,
+    isRead: r.is_read,
+    createdAt: r.created_at,
+  };
+}
+
+// =============================================================
+// Account data export (plan §29 - GDPR-style portability)
+// =============================================================
+
+export async function fetchAccountExport(userId: string): Promise<AccountExportData | null> {
+  if (!supabase) return null;
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', userId)
+    .maybeSingle();
+  const { data: projectRows, error: projectsError } = await supabase
+    .from('projects')
+    .select('*')
+    .eq('owner_id', userId)
+    .order('created_at', { ascending: true });
+  if (projectsError) {
+    console.error('[db] fetchAccountExport projects failed:', projectsError.message);
+    return null;
+  }
+
+  const projectList = (projectRows as ProjectRow[]) || [];
+  const projects = await Promise.all(
+    projectList.map(async row => {
+      const p = mapProjectRow(row, []);
+      const { data: files } = await supabase.from('project_files').select('*').eq('project_id', row.id);
+      const { data: comments } = await supabase.from('comments').select('*').eq('project_id', row.id);
+      const { data: chat } = await supabase.from('chat_messages').select('*').eq('project_id', row.id);
+      const { data: activity } = await supabase.from('activity_events').select('*').eq('project_id', row.id);
+      const { data: snapshots } = await supabase.from('project_snapshots').select('*').eq('project_id', row.id);
+      const { data: annotations } = await supabase.from('pdf_annotations').select('*').eq('project_id', row.id);
+      const { data: drafts } = await supabase.from('drafts').select('*').eq('project_id', row.id);
+      return {
+        project: { ...p, files: ((files as ProjectFileRow[]) || []).map(mapFileRow) },
+        files: ((files as ProjectFileRow[]) || []).map(mapFileRow),
+        comments: ((comments as CommentRow[]) || []).map(rowToComment),
+        chatMessages: ((chat as ChatMessageRow[]) || []).map(rowToChatMessage),
+        activityEvents: ((activity as ActivityEventRow[]) || []).map(rowToActivityEvent),
+        snapshots: ((snapshots as SnapshotRow[]) || []).map(r => ({
+          id: r.id,
+          projectId: r.project_id,
+          title: r.title,
+          files: r.files || [],
+          createdAt: r.created_at,
+        })),
+        annotations: ((annotations as PdfAnnotationRow[]) || []).map(rowToAnnotation),
+        drafts: ((drafts as DraftRow[]) || []) as DraftRow[],
+      };
+    })
+  );
+
+  const { data: notifications } = await supabase
+    .from('notifications')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  return {
+    profile: profile
+      ? {
+          id: (profile as ProfileRow).id,
+          email: (profile as ProfileRow).email,
+          displayName: (profile as ProfileRow).display_name,
+          academicRole: (profile as ProfileRow).academic_role,
+          emailNotifications: (profile as { email_notifications?: boolean }).email_notifications !== false,
+          createdAt: (profile as ProfileRow).created_at,
+        }
+      : null,
+    projects,
+    notifications: ((notifications as NotificationRow[]) || []).map(rowToNotification),
   };
 }
 
