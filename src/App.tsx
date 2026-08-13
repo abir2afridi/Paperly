@@ -49,6 +49,7 @@ import {
 import { getAvatarUrl } from './services/avatar';
 import { validateZipImport, sanitizeProjectFilePath, fileTypeFromPath } from './services/zipSecurity';
 import { downloadAccountArchive } from './services/accountExport';
+import { insertPackageContent } from './services/ctanPackages';
 import { supabase } from './services/supabase';
 import { DraftRestoreModal } from './components/DraftRestoreModal';
 import {
@@ -1002,6 +1003,38 @@ export default function App() {
     handleFileContentChange(activeFile.content + '\n' + snippet);
   };
 
+  // Insert a \usepackage line from the CTAN palette into the main .tex file
+  // (falls back to the first .tex file), placed correctly in the preamble (§26)
+  const handleInsertPackage = (packageName: string) => {
+    const texFiles = project.files.filter(f => f.type === 'TEX');
+    const target =
+      texFiles.find(f => f.path === project.mainFile) ?? texFiles.find(f => f.path.endsWith('.tex')) ?? null;
+    if (!target) return;
+    const { content, inserted } = insertPackageContent(target.content, packageName);
+    if (!inserted) return;
+
+    if (target.path === activeFilePath) {
+      handleFileContentChange(content);
+      return;
+    }
+
+    setProject(prev => ({
+      ...prev,
+      updatedAt: new Date().toISOString(),
+      files: prev.files.map(f => (f.path === target.path ? { ...f, content, sizeBytes: content.length } : f)),
+    }));
+    if (!autosaveEnabled) {
+      dirtyDraftsRef.current.set(target.path, content);
+      setSaveStatus('draft');
+      if (draftFlushTimerRef.current) clearTimeout(draftFlushTimerRef.current);
+      draftFlushTimerRef.current = setTimeout(() => {
+        flushDirtyDrafts();
+      }, 400);
+    } else {
+      setSaveStatus('saving');
+    }
+  };
+
   // Append CrossRef BibTeX Entry to .bib file
   const handleAppendBibtex = (bibtex: string, citeKey: string) => {
     let refsFile = project.files.find(f => f.path.endsWith('.bib'));
@@ -1464,6 +1497,7 @@ export default function App() {
           collabUsers={collabUsers}
           collabStatus={collabStatus}
           onInsertLatex={handleInsertLatex}
+          onInsertPackage={handleInsertPackage}
           onAppendBibtex={handleAppendBibtex}
           onSelectTemplate={handleSelectTemplate}
           comments={comments}

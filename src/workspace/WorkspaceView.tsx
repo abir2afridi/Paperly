@@ -7,10 +7,11 @@
  * and arrive here as props — mirroring how DashboardView is wired.
  */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Code, Eye, PanelRight, PanelRightClose, BadgeCheck } from 'lucide-react';
+import { Code, Eye, PanelRight, PanelRightClose, BadgeCheck, PackageSearch } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
 import { Sidebar } from '../components/Sidebar';
 import { PublicationCheckModal } from '../components/PublicationCheckModal';
+import { CtanPackageModal } from '../components/CtanPackageModal';
 import { runPublicationCheck } from '../services/publicationCheck';
 import { MonacoEditor, MonacoEditorApi } from '../components/MonacoEditor';
 import { TerminalPanel } from '../components/TerminalPanel';
@@ -80,6 +81,7 @@ interface WorkspaceViewProps {
   onDeleteFile: (path: string) => void;
   onUpdateFileContent: (content: string) => void;
   onInsertLatex: (snippet: string) => void;
+  onInsertPackage: (name: string) => void;
   onAppendBibtex: (bibtex: string, citeKey: string) => void;
   onSelectTemplate: (template: Template) => void;
   collab?: { doc: Y.Doc; awareness: unknown } | null;
@@ -131,6 +133,7 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
   onDeleteFile,
   onUpdateFileContent,
   onInsertLatex,
+  onInsertPackage,
   onAppendBibtex,
   onSelectTemplate,
   collab,
@@ -230,6 +233,7 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
   const [isChatPanelOpen, setIsChatPanelOpen] = useState(false);
   const [isMathPaletteOpen, setIsMathPaletteOpen] = useState(false);
+  const [isCtanPaletteOpen, setIsCtanPaletteOpen] = useState(false);
   const [isTableEditorOpen, setIsTableEditorOpen] = useState(false);
   const [isDoiModalOpen, setIsDoiModalOpen] = useState(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
@@ -326,6 +330,11 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm') {
         e.preventDefault();
         setIsMathPaletteOpen(prev => !prev);
+      }
+      // Cmd/Ctrl + Shift + P -> CTAN Package Palette
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        setIsCtanPaletteOpen(prev => !prev);
       }
       // Cmd/Ctrl + K -> AI Assistant
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -530,6 +539,13 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
               )}
               <div className="hidden sm:block h-3.5 w-px bg-slate-300" />
               <button
+                onClick={() => setIsCtanPaletteOpen(true)}
+                className="p-1 border border-slate-300 text-slate-500 hover:text-[#D11111] hover:bg-red-50 transition-colors"
+                title="CTAN Package Palette (Ctrl/Cmd+Shift+P)"
+              >
+                <PackageSearch className="w-3.5 h-3.5" />
+              </button>
+              <button
                 onClick={() => setIsPubCheckOpen(true)}
                 className="p-1 border border-slate-300 text-slate-500 hover:text-[#D11111] hover:bg-red-50 transition-colors"
                 title="Publication Readiness Check"
@@ -639,6 +655,12 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
         isOpen={isMathPaletteOpen}
         onClose={() => setIsMathPaletteOpen(false)}
         onInsertLatex={onInsertLatex}
+      />
+
+      <CtanPackageModal
+        isOpen={isCtanPaletteOpen}
+        onClose={() => setIsCtanPaletteOpen(false)}
+        onInsertPackage={onInsertPackage}
       />
 
       <TableEditorModal

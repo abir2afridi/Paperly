@@ -71,8 +71,8 @@ describe('buildAccountArchive', () => {
 
 describe('buildAccountZip', () => {
   it('includes account.json plus project files and metadata', async () => {
-    const blob = await buildAccountZip(data);
-    const zip = await JSZip.loadAsync(blob);
+    const buffer = (await buildAccountZip(data, 'arraybuffer')) as ArrayBuffer;
+    const zip = await JSZip.loadAsync(buffer);
 
     const account = JSON.parse(await zip.file('account.json')!.async('string'));
     expect(account.app).toBe('Paperly');

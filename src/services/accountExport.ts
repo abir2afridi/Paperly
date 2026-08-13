@@ -63,7 +63,7 @@ const slugify = (name: string): string =>
 const safePath = (p: string): string =>
   p.split('/').map(seg => seg.replace(/[^a-zA-Z0-9._-]/g, '_')).join('/');
 
-export async function buildAccountZip(data: AccountExportData): Promise<Blob> {
+export async function buildAccountZip(data: AccountExportData, type: 'blob' | 'arraybuffer' = 'blob'): Promise<Blob | ArrayBuffer> {
   const zip = new JSZip();
   const archive = buildAccountArchive(data);
   zip.file('account.json', JSON.stringify(archive, null, 2));
@@ -82,11 +82,11 @@ export async function buildAccountZip(data: AccountExportData): Promise<Blob> {
     zip.file(`${folder}drafts.json`, JSON.stringify(entry.drafts, null, 2));
   }
 
-  return zip.generateAsync({ type: 'blob' });
+  return zip.generateAsync({ type });
 }
 
 export async function downloadAccountArchive(data: AccountExportData): Promise<void> {
-  const blob = await buildAccountZip(data);
+  const blob = (await buildAccountZip(data)) as Blob;
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
