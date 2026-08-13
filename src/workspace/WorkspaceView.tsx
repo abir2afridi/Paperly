@@ -6,10 +6,12 @@
  * compilation, collaboration streams) and all project handlers live in App
  * and arrive here as props — mirroring how DashboardView is wired.
  */
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Code, Eye, PanelRight, PanelRightClose } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Code, Eye, PanelRight, PanelRightClose, BadgeCheck } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
 import { Sidebar } from '../components/Sidebar';
+import { PublicationCheckModal } from '../components/PublicationCheckModal';
+import { runPublicationCheck } from '../services/publicationCheck';
 import { MonacoEditor, MonacoEditorApi } from '../components/MonacoEditor';
 import { TerminalPanel } from '../components/TerminalPanel';
 import { VisualRichTextEditor } from '../components/VisualRichTextEditor';
@@ -25,6 +27,9 @@ import { ShortcutsModal } from '../components/ShortcutsModal';
 import { AboutModal } from '../components/AboutModal';
 import { parseBibtex } from '../services/bibParser';
 import { MenuEventPayload } from '../desktop/bridge';
+import { CollabStatus, CollabUser } from '../services/collab';
+import { fetchAnnotations, addAnnotation } from '../services/db';
+import type * as Y from 'yjs';
 import {
   Project,
   ProjectFile,
@@ -75,6 +80,9 @@ interface WorkspaceViewProps {
   onInsertLatex: (snippet: string) => void;
   onAppendBibtex: (bibtex: string, citeKey: string) => void;
   onSelectTemplate: (template: Template) => void;
+  collab?: { doc: Y.Doc; awareness: unknown } | null;
+  collabUsers: CollabUser[];
+  collabStatus: CollabStatus;
   comments: CodeComment[];
   onAddComment: (comment: { filePath: string; anchorLine?: number; authorName: string; body: string }) => void;
   onToggleCommentResolve: (commentId: string) => void;
@@ -117,6 +125,9 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
   onInsertLatex,
   onAppendBibtex,
   onSelectTemplate,
+  collab,
+  collabUsers,
+  collabStatus,
   comments,
   onAddComment,
   onToggleCommentResolve,
@@ -136,6 +147,13 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
   const [isTerminalOpen, setIsTerminalOpen] = useState<boolean>(false);
   const [isTerminalMaximized, setIsTerminalMaximized] = useState(false);
   const editorApiRef = useRef<MonacoEditorApi | null>(null);
+
+  // Publication Readiness Check (plan §44)
+  const [isPubCheckOpen, setIsPubCheckOpen] = useState(false);
+  const pubCheckFindings = useMemo(
+    () => runPublicationCheck(project.mainFile, project.files),
+    [project.mainFile, project.files]
+  );
 
   // Auto-expand the terminal panel when a compile produces errors
   useEffect(() => {
@@ -159,8 +177,40 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
     [activeFilePath, editorMode, onSelectFile]
   );
 
-  // Annotations on the PDF preview
+  // Annotations on the PDF preview (persisted to Supabase when signed in, §23)
   const [annotations, setAnnotations] = useState<PdfAnnotation[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (currentUser && project?.id) {
+      fetchAnnotations(project.id).then(list => {
+        if (!cancelled && list) setAnnotations(list);
+      });
+    } else {
+      setAnnotations([]);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser, project?.id]);
+
+  const handleAddAnnotation = useCallback(
+    async (ann: Omit<PdfAnnotation, 'id' | 'createdAt'>) => {
+      const local: PdfAnnotation = {
+        ...ann,
+        id: `local-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+      };
+      setAnnotations(prev => [...prev, local]);
+      if (currentUser && project?.id) {
+        const saved = await addAnnotation({ projectId: project.id, ...ann });
+        if (saved) {
+          setAnnotations(prev => prev.map(a => (a.id === local.id ? saved : a)));
+        }
+      }
+    },
+    [currentUser, project?.id]
+  );
 
   // Panels & Modals Toggles
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
@@ -396,7 +446,44 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
                 </span>
               )}
               <span className="hidden sm:inline truncate">{activeFilePath}</span>
+              {collab && (
+                <div className="hidden md:flex items-center gap-1.5">
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      collabStatus === 'connected'
+                        ? 'bg-emerald-500'
+                        : collabStatus === 'connecting'
+                        ? 'bg-amber-400'
+                        : 'bg-rose-400'
+                    }`}
+                  />
+                  <span className="text-[10px] text-slate-500">
+                    {collabStatus === 'connected'
+                      ? collabUsers.length > 0
+                        ? `${collabUsers.length} online`
+                        : 'Live'
+                      : collabStatus === 'connecting'
+                      ? 'Connecting…'
+                      : 'Offline — local changes only'}
+                  </span>
+                  {collabUsers.slice(0, 5).map(u => (
+                    <span
+                      key={u.clientId}
+                      title={u.name}
+                      className="w-2.5 h-2.5 rounded-full"
+                      style={{ backgroundColor: u.color }}
+                    />
+                  ))}
+                </div>
+              )}
               <div className="hidden sm:block h-3.5 w-px bg-slate-300" />
+              <button
+                onClick={() => setIsPubCheckOpen(true)}
+                className="p-1 border border-slate-300 text-slate-500 hover:text-[#D11111] hover:bg-red-50 transition-colors"
+                title="Publication Readiness Check"
+              >
+                <BadgeCheck className="w-3.5 h-3.5" />
+              </button>
               <button
                 onClick={() => setIsPdfPanelOpen(prev => !prev)}
                 className={`p-1 border transition-colors ${
@@ -426,6 +513,7 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
                 codeThemeId={activeCodeThemeId}
                 apiRef={editorApiRef}
                 onCompileRequest={onCompile}
+                collab={collab}
               />
             </div>
             <div className={editorMode === 'visual' ? 'h-full' : 'hidden'}>
@@ -444,7 +532,7 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
             pdfDataUrl={compilationResult?.pdfDataUrl || null}
             diagnostics={compilationResult?.diagnostics || []}
             annotations={annotations}
-            onAddAnnotation={ann => setAnnotations(prev => [...prev, { ...ann, id: `ann-${Date.now()}`, createdAt: new Date().toISOString() }])}
+            onAddAnnotation={handleAddAnnotation}
             onSyncTexJump={() => {
               setEditorMode('code');
             }}
@@ -533,6 +621,12 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
       <AboutModal
         isOpen={isAboutOpen}
         onClose={onCloseAbout}
+      />
+
+      <PublicationCheckModal
+        isOpen={isPubCheckOpen}
+        onClose={() => setIsPubCheckOpen(false)}
+        findings={pubCheckFindings}
       />
     </div>
   );

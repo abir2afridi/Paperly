@@ -9,6 +9,10 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+        // y-monaco imports monaco's internal editor.api subpath, which the
+        // monaco-editor exports map does not expose. Route it to the package
+        // root so both share one monaco instance/bundle.
+        'monaco-editor/esm/vs/editor/editor.api.js': 'monaco-editor',
       },
     },
     server: {

@@ -88,3 +88,17 @@ export interface SnapshotRow {
   files: { path: string; content: string }[];
   created_at: string;
 }
+
+export interface PdfAnnotationRow {
+  id: string;
+  project_id: string;
+  page: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  author_name: string;
+  text: string;
+  color: string;
+  created_at: string;
+}

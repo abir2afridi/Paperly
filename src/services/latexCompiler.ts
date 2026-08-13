@@ -1,5 +1,6 @@
 import { CompilationResult, CompileDiagnostic, ProjectFile } from '../types';
 import { createPdfBinary } from './pdfEngine';
+import { runLatexLint } from './latexLint';
 
 /**
  * TeXForge LaTeX Compilation Engine
@@ -421,6 +422,11 @@ export async function compileLatexProject(options: CompileOptions): Promise<Comp
   // real Overleaf-style errors (missing .cls / .sty / images / .bib).
   const diagnostics = validateResources(texContent, options.files, mainFile.path);
   const hasResourceErrors = diagnostics.some(d => d.severity === 'error');
+
+  // Static lint pass (plan §24): conservative warnings/info on top of the
+  // resource validation. Never blocks compilation (status stays derived from
+  // resource errors + parser success below).
+  diagnostics.push(...runLatexLint(mainFile.path, options.files));
 
   const sections: { title: string; content: string[] }[] = [];
 

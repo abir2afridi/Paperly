@@ -1,6 +1,8 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import Editor, { OnMount, BeforeMount, Monaco } from '@monaco-editor/react';
 import { Loader2 } from 'lucide-react';
+import type * as Y from 'yjs';
+import { MonacoBinding } from 'y-monaco';
 import { BibEntry, CompileDiagnostic } from '../types';
 import { CODE_THEMES, CodeThemeId } from '../services/codeThemeService';
 
@@ -19,6 +21,8 @@ interface MonacoEditorProps {
   codeThemeId?: CodeThemeId;
   apiRef?: React.MutableRefObject<MonacoEditorApi | null>;
   onCompileRequest?: () => void;
+  /** Active real-time collaboration session for this file, if any. */
+  collab?: { doc: Y.Doc; awareness: unknown } | null;
 }
 
 export const MonacoEditor: React.FC<MonacoEditorProps> = ({
@@ -32,16 +36,22 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
   codeThemeId = 'match-theme',
   apiRef,
   onCompileRequest,
+  collab,
 }) => {
   const editorRef = useRef<unknown>(null);
   const monacoRef = useRef<Monaco | null>(null);
   const prevFilePathRef = useRef<string>(filePath);
+  const collabRef = useRef(collab);
+  const bindingRef = useRef<{ destroy: () => void } | null>(null);
   // Keep the latest compile callback so the Monaco Ctrl+Enter binding never
   // captures a stale closure (the editor instance survives prop re-renders).
   const onCompileRequestRef = useRef(onCompileRequest);
   useEffect(() => {
     onCompileRequestRef.current = onCompileRequest;
   }, [onCompileRequest]);
+  useEffect(() => {
+    collabRef.current = collab;
+  }, [collab]);
 
   // On file switch: reset the viewport & cursor to the top of the new file.
   // Monaco preserves scroll/cursor position across model value swaps, so the
@@ -62,6 +72,38 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
       editor.setPosition({ lineNumber: 1, column: 1 });
     });
   }, [filePath]);
+
+  // Attach/detach the Yjs<->Monaco binding when the collab session arrives,
+  // leaves, or the file changes. While a session is active the binding owns
+  // the model content (y-monaco forces the model from the shared text on
+  // attach), which is why the controlled `value` prop is disabled below.
+  const attachCollabBinding = useCallback(() => {
+    bindingRef.current?.destroy();
+    bindingRef.current = null;
+    const session = collabRef.current;
+    if (!session) return;
+    const editor = editorRef.current as
+      | { getModel: () => { isDisposed?: boolean } | null }
+      | null
+      | undefined;
+    if (!editor) return;
+    const model = editor.getModel();
+    if (!model || model.isDisposed) return;
+    bindingRef.current = new MonacoBinding(
+      session.doc.getText('content'),
+      model,
+      new Set([editor]),
+      session.awareness
+    );
+  }, []);
+
+  useEffect(() => {
+    attachCollabBinding();
+    return () => {
+      bindingRef.current?.destroy();
+      bindingRef.current = null;
+    };
+  }, [attachCollabBinding, collab, filePath]);
 
   // 'match-theme' follows the workspace theme; any other selection uses a
   // fixed VS Code-style palette that is independent of the workspace theme.
@@ -415,6 +457,10 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
         onCompileRequestRef.current?.();
       });
     }
+
+    // If a collab session already exists, bind the editor to the shared doc
+    // immediately (the effect below covers sessions that arrive later).
+    attachCollabBinding();
   };
 
   // Clear the exposed API when the editor unmounts (e.g. switching to Visual mode)
@@ -466,7 +512,8 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
         language="latex"
         theme={effectiveMonacoThemeId}
         beforeMount={handleBeforeMount}
-        value={content}
+        defaultValue={collab ? content : undefined}
+        value={collab ? undefined : content}
         onChange={value => onChange(value || '')}
         onMount={handleEditorMount}
         loading={

@@ -2,12 +2,44 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import http from 'http';
 import { createServer as createViteServer } from 'vite';
+import { WebSocketServer } from 'ws';
+import { createClient } from '@supabase/supabase-js';
+import { setContentInitializor, setupWSConnection } from '@y/websocket-server/utils';
+import { sanitizeProjectFilePath } from './src/services/zipSecurity';
+import { createRateLimiter, clientIp } from './src/services/rateLimit';
+import 'dotenv/config';
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json({ limit: '20mb' }));
+
+// ---- Security headers (non-CSP; CSP is opt-in behind TEXFORGE_ENABLE_CSP,
+// see docs/security.md) ----
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
+
+// ---- Rate limiting (per-IP, in-memory fixed window) ----
+const apiGeneralLimiter = createRateLimiter(600, 60_000);
+const aiGenerateLimiter = createRateLimiter(30, 60_000);
+const aiProviderMutateLimiter = createRateLimiter(20, 60_000);
+const aiTestLimiter = createRateLimiter(10, 60_000);
+const collabConnectLimiter = createRateLimiter(30, 60_000);
+
+app.use('/api', (req, res, next) => {
+  if (apiGeneralLimiter.allow(clientIp(req))) return next();
+  res.status(429).json({ error: 'Too many requests. Please try again in a minute.' });
+});
 
 // Encryption key derived or environment provided
 const ENCRYPTION_SECRET = process.env.AI_ENCRYPTION_KEY || 'texforge-secret-encryption-key-32b';
@@ -122,6 +154,9 @@ app.get('/api/ai/providers', (_req, res) => {
 
 // POST Create AI Provider
 app.post('/api/ai/providers', (req, res) => {
+  if (!aiProviderMutateLimiter.allow(clientIp(req))) {
+    return res.status(429).json({ error: 'Too many requests. Please try again in a minute.' });
+  }
   const { label, providerType, baseUrl, apiKey, model, extraHeadersJson, temperature, maxTokens, isDefault } = req.body;
 
   if (!label || !baseUrl || !apiKey || !model) {
@@ -167,6 +202,9 @@ app.post('/api/ai/providers', (req, res) => {
 
 // PATCH Update AI Provider
 app.patch('/api/ai/providers/:id', (req, res) => {
+  if (!aiProviderMutateLimiter.allow(clientIp(req))) {
+    return res.status(429).json({ error: 'Too many requests. Please try again in a minute.' });
+  }
   const provider = aiProvidersStore.find(p => p.id === req.params.id);
   if (!provider) {
     return res.status(404).json({ error: 'AI Provider configuration not found.' });
@@ -199,6 +237,9 @@ app.patch('/api/ai/providers/:id', (req, res) => {
 
 // DELETE AI Provider
 app.delete('/api/ai/providers/:id', (req, res) => {
+  if (!aiProviderMutateLimiter.allow(clientIp(req))) {
+    return res.status(429).json({ error: 'Too many requests. Please try again in a minute.' });
+  }
   const idx = aiProvidersStore.findIndex(p => p.id === req.params.id);
   if (idx !== -1) {
     aiProvidersStore.splice(idx, 1);
@@ -209,6 +250,9 @@ app.delete('/api/ai/providers/:id', (req, res) => {
 
 // POST Test Connection
 app.post('/api/ai/providers/:id/test', async (req, res) => {
+  if (!aiTestLimiter.allow(clientIp(req))) {
+    return res.status(429).json({ error: 'Too many requests. Please try again in a minute.' });
+  }
   const provider = aiProvidersStore.find(p => p.id === req.params.id);
   if (!provider) {
     return res.status(404).json({ error: 'AI Provider configuration not found.' });
@@ -346,6 +390,9 @@ function parseCompletionBody(rawBody: string, providerType: string): string {
 
 // POST Generate AI completions for TeXForge actions
 app.post('/api/ai/generate', async (req, res) => {
+  if (!aiGenerateLimiter.allow(clientIp(req))) {
+    return res.status(429).json({ error: 'Too many requests. Please try again in a minute.' });
+  }
   const { providerId, prompt, context } = req.body;
 
   let provider = aiProvidersStore.find(p => p.id === providerId);
@@ -440,40 +487,152 @@ This is the context: write your answers in the language the user wrote in; if un
   }
 });
 
-// POST /api/compile - Server process LaTeX compilation endpoint
-app.post('/api/compile', (req, res) => {
-  const { mainFilePath, files, compiler, bibTool } = req.body;
-
-  if (!files || !Array.isArray(files)) {
-    return res.status(400).json({ error: 'Files array is required for LaTeX compilation.' });
-  }
-
-  const normalizedMain = (mainFilePath || 'main.tex').replace(/^(\.\/|\/)/, '');
-  const mainFile = files.find((f: any) => f.path.replace(/^(\.\/|\/)/, '') === normalizedMain) || files.find((f: any) => f.path?.endsWith('.tex')) || files[0];
-
-  if (!mainFile || !mainFile.content) {
-    return res.status(400).json({
-      status: 'error',
-      log: '! LaTeX Error: Main file not found or empty.',
-      diagnostics: [{ severity: 'error', file: mainFilePath || 'main.tex', line: 1, message: 'Main LaTeX file could not be located.' }],
-    });
-  }
-
-  const rawLog = [
-    `This is ${compiler || 'pdfTeX'}, Version 3.141592653-2.6-1.40.25 (Server pdflatex Engine)`,
-    `(./${mainFile.path}`,
-    `Output written on ${mainFile.path.replace('.tex', '.pdf')} (1 page, 14201 bytes).`,
-    `Transcript written on ${mainFile.path.replace('.tex', '.log')}.`,
-  ].join('\n');
-
-  res.json({
-    status: 'success',
-    log: rawLog,
-    diagnostics: [],
-    durationMs: 42,
-    compiledAt: new Date().toISOString(),
+// POST /api/compile - Server-side compile endpoint.
+// Honest response: the server does NOT run a TeX engine. Compilation happens
+// in-browser (see docs/compilation.md). Returning a canned success log here
+// would be fake functionality, so this route reports the real state of the
+// deployment instead of fabricating a PDF/transcript.
+app.post('/api/compile', (_req, res) => {
+  res.status(501).json({
+    status: 'error',
+    error: 'Server-side compilation is not available. Compilation runs in-browser (parser-based engine). A real TeX backend is planned — see docs/compilation.md.',
+    diagnostics: [{ severity: 'error', file: 'main.tex', line: 1, message: 'Server-side TeX compilation is not implemented; compile from the editor instead.' }],
   });
 });
+
+// ================= REAL-TIME COLLABORATION (Yjs over WebSocket) =================
+// Rooms follow the plan's naming scheme: `project:<projectId>:file:<encodedPath>`.
+// Access is authorized at connection time (upgrade) using the caller's Supabase
+// session token: the server validates the token and the caller's access to the
+// project before the WebSocket is accepted. No document content is ever used
+// for authorization.
+
+const COLLAB_PATH = '/collab';
+const collabTokenByRoom = new Map<string, string>();
+const collabClientByToken = new Map<string, ReturnType<typeof createClient>>();
+
+const COLLAB_SUPABASE_URL = process.env.VITE_SUPABASE_URL || '';
+const COLLAB_SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || '';
+
+function supabaseForCollabToken(token: string) {
+  let client = collabClientByToken.get(token);
+  if (!client) {
+    client = createClient(COLLAB_SUPABASE_URL, COLLAB_SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    // Bound the token cache so stale sessions can't accumulate unbounded.
+    if (collabClientByToken.size > 100) collabClientByToken.clear();
+    collabClientByToken.set(token, client);
+  }
+  return client;
+}
+
+// Parse a room name back into its project id and file path.
+function parseCollabRoom(room: string): { projectId: string; filePath: string } | null {
+  const match = /^project:([^:]+):file:(.+)$/.exec(room);
+  if (!match) return null;
+  const filePath = decodeURIComponent(match[2]);
+  return { projectId: match[1], filePath };
+}
+
+// Seed a freshly created room document from the persisted project file. This
+// is authoritative (server-side, race-free) and what makes reconnects and
+// server restarts consistent with what the clients have in their databases.
+setContentInitializor(async ydoc => {
+  // WSSharedDoc carries the room name; Y.Doc's public type doesn't expose it.
+  const roomName = (ydoc as unknown as { name?: string }).name || '';
+  const room = parseCollabRoom(roomName);
+  if (!room) return;
+  try {
+    const token = collabTokenByRoom.get(roomName);
+    if (!token) return;
+    const sb = supabaseForCollabToken(token);
+    const { data: row } = await sb
+      .from('project_files')
+      .select('content')
+      .eq('project_id', room.projectId)
+      .eq('path', room.filePath)
+      .maybeSingle();
+    const content: string | undefined = (row as { content?: string } | null)?.content;
+    const ytext = ydoc.getText('content');
+    if (content && ytext.toString() === '') {
+      ydoc.transact(() => ytext.insert(0, content), 'seed');
+    }
+  } catch (err) {
+    console.error('Collab seed failed for room', roomName, err);
+  }
+});
+
+const collabWss = new WebSocketServer({ noServer: true });
+let collabHostServer: http.Server | null = null;
+
+function attachCollabUpgrade(server: http.Server) {
+  if (collabHostServer === server) return;
+  collabHostServer = server;
+  server.on('upgrade', (request, socket, head) => {
+    const url = new URL(request.url || '/', 'http://localhost');
+    if (url.pathname !== COLLAB_PATH) {
+      socket.destroy();
+      return;
+    }
+    const token = url.searchParams.get('token') || '';
+    const projectId = url.searchParams.get('project') || '';
+    const filePath = sanitizeProjectFilePath(url.searchParams.get('file') || '');
+    if (!collabConnectLimiter.allow(clientIp(request))) {
+      socket.write('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+    const reject = (code: string) => {
+      socket.write(`HTTP/1.1 ${code}\r\nConnection: close\r\n\r\n`);
+      socket.destroy();
+    };
+
+    if (!COLLAB_SUPABASE_URL || !COLLAB_SUPABASE_ANON_KEY) {
+      reject('503 Service Unavailable');
+      return;
+    }
+    if (!token || !projectId || !filePath || !/\.(tex|bib)$/i.test(filePath)) {
+      reject('400 Bad Request');
+      return;
+    }
+
+    const room = `project:${projectId}:file:${encodeURIComponent(filePath)}`;
+
+    (async () => {
+      try {
+        const sb = supabaseForCollabToken(token);
+        const { data: userData, error: userError } = await sb.auth.getUser();
+        if (userError || !userData?.user) {
+          reject('401 Unauthorized');
+          return;
+        }
+        const { data: projectRow } = await sb
+          .from('projects')
+          .select('id')
+          .eq('id', projectId)
+          .maybeSingle();
+        if (!projectRow) {
+          reject('403 Forbidden');
+          return;
+        }
+        collabTokenByRoom.set(room, token);
+        if (collabTokenByRoom.size > 500) collabTokenByRoom.clear();
+        collabWss.handleUpgrade(request, socket, head, ws => {
+          collabWss.emit('connection', ws, request, room);
+        });
+      } catch (err) {
+        console.error('Collab auth failed:', err);
+        reject('500 Internal Server Error');
+      }
+    })();
+  });
+
+  collabWss.on('connection', (ws, request, room: string) => {
+    setupWSConnection(ws, request, { docName: room });
+  });
+}
 
 // ================= VITE / SERVE MIDDLEWARE =================
 
@@ -492,8 +651,12 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = http.createServer(app);
+  attachCollabUpgrade(server);
+
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`TeXForge Server listening on http://localhost:${PORT}`);
+    console.log(`Collab WebSocket endpoint: ws(s)://<host>:${PORT}${COLLAB_PATH}`);
   });
 }
 

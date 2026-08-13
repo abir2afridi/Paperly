@@ -14,9 +14,15 @@ export function parseBibtex(bibContent: string): BibEntry[] {
     const body = match[3];
 
     const getField = (fieldName: string): string => {
-      const fieldRegex = new RegExp(`${fieldName}\\s*=\\s*[\"{]?([^\"}\\,\\n]+)[\"}]?`, 'i');
+      // Braced ({...}) values may contain commas; quoted ("...") values may too.
+      // Bare values stop at comma/whitespace. Each alternative captures the content.
+      const fieldRegex = new RegExp(
+        `${fieldName}\\s*=\\s*\\{([^\\}]*)\\}|${fieldName}\\s*=\\s*"([^"]*)"|${fieldName}\\s*=\\s*([^,\\s\\}]+)`,
+        'i'
+      );
       const m = body.match(fieldRegex);
-      return m ? m[1].trim() : '';
+      if (!m) return '';
+      return (m[1] ?? m[2] ?? m[3] ?? '').trim();
     };
 
     const title = getField('title') || citeKey;

@@ -8,8 +8,9 @@ import {
   ActivityEventRow,
   CommentRow,
   SnapshotRow,
+  PdfAnnotationRow,
 } from './supabase';
-import { Project, ProjectFile, CodeComment, ChatMessage, ActivityEvent, ProjectSnapshot } from '../types';
+import { Project, ProjectFile, CodeComment, ChatMessage, ActivityEvent, ProjectSnapshot, PdfAnnotation } from '../types';
 
 export const isDatabaseAvailable = (): boolean => supabase !== null;
 
@@ -408,6 +409,81 @@ export async function deleteCommentFromDb(commentId: string): Promise<void> {
   if (!supabase) return;
   const { error } = await supabase.from('comments').delete().eq('id', commentId);
   if (error) console.error('[db] deleteComment failed:', error.message);
+}
+
+// =============================================================
+// PDF Annotations (plan §23)
+// =============================================================
+
+export async function fetchAnnotations(projectId: string): Promise<PdfAnnotation[] | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('pdf_annotations')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: true })
+    .limit(500);
+  if (error) {
+    console.error('[db] fetchAnnotations failed:', error.message);
+    return null;
+  }
+  return (data as PdfAnnotationRow[]).map(rowToAnnotation);
+}
+
+export async function addAnnotation(annotation: {
+  projectId: string;
+  page: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  authorName: string;
+  text: string;
+  color: string;
+}): Promise<PdfAnnotation | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('pdf_annotations')
+    .insert({
+      project_id: annotation.projectId,
+      page: annotation.page,
+      x: annotation.x,
+      y: annotation.y,
+      width: annotation.width,
+      height: annotation.height,
+      author_name: annotation.authorName,
+      text: annotation.text,
+      color: annotation.color,
+    })
+    .select()
+    .single();
+  if (error) {
+    console.error('[db] addAnnotation failed:', error.message);
+    return null;
+  }
+  return rowToAnnotation(data as PdfAnnotationRow);
+}
+
+export async function deleteAnnotationFromDb(annotationId: string): Promise<void> {
+  if (!supabase) return;
+  const { error } = await supabase.from('pdf_annotations').delete().eq('id', annotationId);
+  if (error) console.error('[db] deleteAnnotation failed:', error.message);
+}
+
+function rowToAnnotation(r: PdfAnnotationRow): PdfAnnotation {
+  return {
+    id: r.id,
+    projectId: r.project_id,
+    page: r.page,
+    x: r.x,
+    y: r.y,
+    width: r.width,
+    height: r.height,
+    authorName: r.author_name,
+    text: r.text,
+    color: r.color,
+    createdAt: r.created_at,
+  };
 }
 
 // =============================================================

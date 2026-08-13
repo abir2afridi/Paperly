@@ -12,6 +12,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "node --stack-size=12000 node_modules/typescript/bin/tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "sync:tauri-conf": "node scripts/sync-tauri-conf.mjs",
     "gen:icons": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/gen-icons.ps1",
     "tauri:dev": "npm run sync:tauri-conf && tauri dev",
@@ -24,6 +26,7 @@
     "@tailwindcss/vite": "^4.1.14",
     "@tauri-apps/api": "^2.5.0",
     "@vitejs/plugin-react": "^5.0.4",
+    "@y/websocket-server": "^0.1.5",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "jszip": "^3.10.1",
@@ -34,6 +37,9 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "vite": "^6.2.3",
+    "ws": "^8.21.3",
+    "y-monaco": "^0.1.6",
+    "y-websocket": "^3.1.0",
     "yjs": "^13.6.32",
     "zod": "^4.4.3"
   },
@@ -48,6 +54,7 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3"
+    "vite": "^6.2.3",
+    "vitest": "^3.2.7"
   }
 }

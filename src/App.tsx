@@ -37,6 +37,15 @@ import {
   subscribeToProjectChanges,
 } from './services/db';
 import { getAvatarUrl } from './services/avatar';
+import { validateZipImport, sanitizeProjectFilePath, fileTypeFromPath } from './services/zipSecurity';
+import { supabase } from './services/supabase';
+import {
+  CollabSession,
+  CollabStatus,
+  CollabUser,
+  collabServerUrl,
+  createCollabSession,
+} from './services/collab';
 
 import {
   Project,
@@ -651,6 +660,76 @@ export default function App() {
     }
   };
 
+  // ---- Real-time collaboration (Yjs over WebSocket) ----
+  const [collabSession, setCollabSession] = useState<CollabSession | null>(null);
+  const [collabUsers, setCollabUsers] = useState<CollabUser[]>([]);
+  const [collabStatus, setCollabStatus] = useState<CollabStatus>('idle');
+
+  // Latest content of the active file, for de-duplicating collab round-trips
+  // (Monaco onChange and the Yjs observer both report the same content).
+  const activeFileContentRef = useRef<string>('');
+  useEffect(() => {
+    activeFileContentRef.current = project.files.find(f => f.path === activeFilePath)?.content ?? '';
+  }, [project.files, activeFilePath]);
+
+  const handleFileContentChangeRef = useRef(handleFileContentChange);
+  useEffect(() => {
+    handleFileContentChangeRef.current = handleFileContentChange;
+  }, [handleFileContentChange]);
+
+  useEffect(() => {
+    collabSession?.destroy();
+    setCollabSession(null);
+    setCollabUsers([]);
+    setCollabStatus('idle');
+
+    const isCollabFile = /\.(tex|bib)$/i.test(activeFilePath);
+    if (!currentUser?.id || !project?.id || !supabase || !isCollabFile) return;
+
+    if (!collabServerUrl()) {
+      setCollabStatus('idle');
+      return;
+    }
+
+    let cancelled = false;
+    let session: CollabSession | null = null;
+
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (cancelled || !data.session?.access_token) return;
+        session = createCollabSession({
+          projectId: project.id,
+          filePath: activeFilePath,
+          token: data.session.access_token,
+          userName: currentUser.name || currentUser.email || 'Collaborator',
+          initialContent: activeFileContentRef.current,
+          onContent: content => {
+            // Local echoes arrive via Monaco onChange; only forward real
+            // (remote or seed) changes to keep autosave/compile in sync.
+            if (content === activeFileContentRef.current) return;
+            activeFileContentRef.current = content;
+            handleFileContentChangeRef.current(content);
+          },
+          onUsers: users => setCollabUsers(users),
+          onStatus: status => setCollabStatus(status),
+        });
+        if (cancelled) {
+          session.destroy();
+          return;
+        }
+        setCollabSession(session);
+      } catch {
+        if (!cancelled) setCollabStatus('idle');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      session?.destroy();
+    };
+  }, [currentUser?.id, project?.id, activeFilePath]);
+
   // Create File
   const handleCreateFile = (path: string, type: ProjectFile['type']) => {
     if (project.files.some(f => f.path === path)) return;
@@ -813,26 +892,39 @@ export default function App() {
 
   const importZipContent = async (data: ArrayBuffer | Uint8Array, projectName: string) => {
     const zip = await JSZip.loadAsync(data);
+    const entries = Object.values(zip.files).map(entry => ({
+      path: entry.name,
+      isDirectory: entry.dir,
+      uncompressedSize:
+        typeof (entry as unknown as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize === 'number'
+          ? ((entry as unknown as { _data: { uncompressedSize: number } })._data.uncompressedSize as number)
+          : 0,
+      unixPermissions: typeof entry.unixPermissions === 'string' ? Number(entry.unixPermissions) : entry.unixPermissions,
+    }));
+    const validation = validateZipImport(entries);
+    if (!validation.ok) {
+      alert(`Cannot import ZIP: ${validation.reason}`);
+
+      return;
+    }
+
     const importedFiles: ProjectFile[] = [];
 
     for (const [relativePath, zipEntry] of Object.entries(zip.files)) {
-      if (!zipEntry.dir) {
-        const content = await zipEntry.async('string');
-        let type: ProjectFile['type'] = 'TEX';
-        if (relativePath.endsWith('.bib')) type = 'BIB';
-        else if (relativePath.endsWith('.cls')) type = 'CLS';
-        else if (relativePath.endsWith('.sty')) type = 'STY';
+      if (zipEntry.dir) continue;
+      const safePath = sanitizeProjectFilePath(relativePath);
+      if (!safePath) continue;
+      const content = await zipEntry.async('string');
 
-        importedFiles.push({
-          id: `file-${Date.now()}-${Math.random()}`,
-          projectId: project.id,
-          path: relativePath,
-          type,
-          content,
-          sizeBytes: content.length,
-          updatedAt: new Date().toISOString(),
-        });
-      }
+      importedFiles.push({
+        id: `file-${Date.now()}-${Math.random()}`,
+        projectId: project.id,
+        path: safePath,
+        type: fileTypeFromPath(safePath),
+        content,
+        sizeBytes: content.length,
+        updatedAt: new Date().toISOString(),
+      });
     }
 
     if (importedFiles.length > 0) {
@@ -1156,6 +1248,9 @@ export default function App() {
           onRenameFile={handleRenameFile}
           onDeleteFile={handleDeleteFile}
           onUpdateFileContent={handleFileContentChange}
+          collab={collabSession}
+          collabUsers={collabUsers}
+          collabStatus={collabStatus}
           onInsertLatex={handleInsertLatex}
           onAppendBibtex={handleAppendBibtex}
           onSelectTemplate={handleSelectTemplate}

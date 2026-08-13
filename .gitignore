@@ -45,6 +45,8 @@ pnpm-debug.log*
 
 # Database 
 supabase.json
+.env
+
 
 
 # VS Code Local History
@@ -52,6 +54,7 @@ supabase.json
 
 
 docs/
+FEATURE_AUDIT.md
 
 # Tauri desktop build output
 src-tauri/target/
@@ -62,3 +65,4 @@ src-tauri/target/
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+.env.example
