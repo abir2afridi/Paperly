@@ -1,24 +1,29 @@
-# TeXForge
+# Paperly (TeXForge)
 
-A full-stack, browser-based **LaTeX editor** with real-time PDF compilation, rich editing tools, AI-assisted writing, and collaboration — built to run as a single Node.js process.
+A full-stack, browser-based **LaTeX editor** with real-time PDF compilation, rich editing tools, AI-assisted writing, real-time collaboration, and a research assistant — built to run as a single Node.js process with a Supabase backend.
 
 > This repository is tracked under the name `Paperly`; the application itself is **TeXForge**.
 
 ## ✨ Features
 
-- **Live LaTeX Compilation** — compile `.tex` projects to PDF with `.log` diagnostics (error line numbers surfaced back into the editor)
-- **Monaco Editor** — full LaTeX syntax highlighting, snippet completion, live `.bib` citation autocomplete, and inline diagnostics
+- **Live LaTeX Compilation** — compile `.tex` projects to a real PDF with `.log` diagnostics (error line numbers surfaced back into the editor), lint warnings, and a `CompileBackend` abstraction with a pluggable factory (`src/services/compileBackends.ts`)
+- **Monaco Editor** — full LaTeX syntax highlighting, snippet completion, live `.bib` citation autocomplete, inline diagnostics, and LaTeX-aware spell checking (nspell, squiggly underlines, "did you mean" suggestions)
 - **Visual Rich-Text Mode** — switch between source code and a visual editor view
-- **PDF.js Preview** — interactive PDF rendering with zoom, search, dark mode, annotations, and SyncTeX source jump
+- **PDF.js Preview** — interactive PDF rendering with zoom, rotate, search, dark mode, per-page annotations, and **SyncTeX-style source jump** (click PDF text → editor jumps to the matching source line)
 - **Math Palette** — KaTeX-powered symbol picker with live preview and code insertion
 - **Table Generator** — grid UI that emits `\begin{tabular}` with `booktabs` support
-- **Templates** — Article, IEEE, Beamer, Thesis, CV and more, plus ZIP import/export (Overleaf-compatible)
+- **Templates** — Article, IEEE, Beamer, Thesis, CV and more, plus ZIP import/export (Overleaf-compatible, hardened against path traversal)
 - **CrossRef DOI Search** — look up citations by DOI and auto-append formatted BibTeX
-- **AI Assistant** — explain, fix, rewrite, and generate abstracts using your own BYO-Key providers (OpenAI-compatible, Anthropic, custom HTTP)
+- **Real-Time Collaboration** — Yjs CRDT document sync over a WebSocket (y-websocket), live presence cursors, project chat room, comments, and an append-only activity feed
+- **AI Assistant** — explain, fix, rewrite, and generate abstracts using your own BYO-Key providers, behind a provider-agnostic adapter (`AIProviderAdapter` with `chat()`/`testConnection()` for OpenAI-compatible, Anthropic, and custom HTTP endpoints)
 - **Secure Provider Keys** — AES-256-GCM encrypted API keys with masked display and live connection testing
-- **Collaboration** — project chat room and append-only activity feed
+- **Research Assistant** — upload a PDF (client-side text extraction via pdf.js), search Semantic Scholar, add papers as BibTeX, and generate a LaTeX literature review or fact-check a claim against the source
 - **Version History** — snapshots, diff viewing, and restore points
-- **Dashboard & Landing** — project management with serial-numbered projects, login/signup UI
+- **Session Management** — Settings → Sessions lists your logged-in devices (GoTrue admin API) with one-click revocation
+- **Chat Retention** — per-user chat auto-delete (7/30/90 days or keep forever) enforced by a server-side sweep
+- **PWA / Offline** — web app manifest, service worker, offline banner (production builds)
+- **Onboarding Tour** — one-time guided 5-step tour plus a shortcuts cheatsheet (`Ctrl/Cmd + /`)
+- **Dashboard & Landing** — project management with serial-numbered projects, login/signup UI (email + Google OAuth)
 - **Editorial Paper Design** — landing, login, and dashboard pages styled as a scholarly journal: warm paper canvas (`#fcfaf7`), obsidian ink (`#191919`), serif display headings (Newsreader), and crisp 1px hairlines
 - **Light / Dark Mode Toggle** — one-click Sun/Moon switch across landing, login, and dashboard (persisted in LocalStorage), plus 5 customizable workspace/editor themes
 
@@ -29,26 +34,40 @@ A full-stack, browser-based **LaTeX editor** with real-time PDF compilation, ric
 | Frontend | React 19 · TypeScript · Tailwind CSS v4 · Motion                                   |
 | Editor   | Monaco Editor · KaTeX · pdfjs-dist                                                 |
 | Design   | Editorial paper/ink tokens (Tailwind `@theme`) · Newsreader · Plus Jakarta Sans · JetBrains Mono |
-| Backend  | Express 4 · Vite (dev middleware) · Node.js                                        |
-| Storage  | In-memory + LocalStorage (projects, file snapshots, encrypted AI provider configs) |
+| Backend  | Express 4 · Vite (dev middleware) · Node.js · y-websocket (collab) · Resend (email) |
+| Database | Supabase (Postgres + Auth + RLS) · encrypted AI provider configs · LocalStorage drafts |
+| Desktop  | Tauri 2 (optional native shell: `npm run tauri:dev`)                                |
 
 ## 📁 Project Structure
 
 ```text
 ├── server.ts                      # Express server: /api/* routes, AI provider encryption/proxy,
-│                                  # compile endpoint, Vite dev middleware
+│                                  # session management, chat-retention sweep, collab WebSocket,
+│                                  # security headers + rate limiters, Vite dev middleware
 ├── src/
 │   ├── App.tsx                    # Root app: views (landing/dashboard/workspace), state
 │   ├── types.ts                   # Shared Zod schemas & TypeScript interfaces
 │   ├── data/templates.ts          # Starter LaTeX templates
 │   ├── services/
 │   │   ├── latexCompiler.ts       # LaTeX → PDF compilation pipeline + log parsing
-│   │   ├── aiService.ts           # BYO-Key provider clients
+│   │   ├── compileBackends.ts     # CompileBackend interface + factory (§4A)
+│   │   ├── aiEngine.ts            # BYO-Key provider config + generation client
+│   │   ├── aiProviderAdapter.ts   # Provider-agnostic adapters (chat/testConnection)
+│   │   ├── researchAssistant.ts   # PDF extraction, Semantic Scholar, BibTeX, AI prompts
+│   │   ├── spellCheck.ts          # LaTeX-aware spell check (nspell)
+│   │   ├── syncTexMatch.ts        # PDF text → source line matching
+│   │   ├── collab.ts              # Yjs collaboration helpers
+│   │   ├── sessions.ts            # Device/session management client
+│   │   ├── db.ts · supabase.ts    # Supabase data + auth layer
 │   │   ├── bibParser.ts           # .bib parsing for live completion
 │   │   ├── crossrefService.ts     # CrossRef DOI → BibTeX
-│   │   └── themeService.ts        # Theme persistence, light/dark toggling & DOM application
-│   └── components/                # Navbar, Sidebar, MonacoEditor, PdfViewer,
-│                                  # AiAssistantPanel, SettingsModal, modals, etc.
+│   │   ├── themeService.ts        # Theme persistence, light/dark toggling & DOM application
+│   │   └── …                      # rateLimit, zipSecurity, publicationCheck, snapshotDiff, etc.
+│   ├── vendor/                    # Vendored English Hunspell dictionary (nspell)
+│   └── components/                # Navbar, Sidebar, MonacoEditor, PdfViewer, OnboardingTour,
+│                                  # ResearchAssistantModal, SettingsModal, modals, etc.
+├── supabase/migrations/           # SQL migrations (chat retention, annotations, …)
+├── public/                        # Static assets, PWA manifest + service worker
 └── dist/                          # Production build output
 ```
 
@@ -82,11 +101,13 @@ npm start          # node dist/server.cjs
 
 ### Other scripts
 
-| Script            | Description                    |
-| ----------------- | ------------------------------ |
-| `npm run preview` | Preview the built frontend     |
-| `npm run clean`   | Remove `dist/` and `server.js` |
-| `npm run lint`    | Type-check with `tsc --noEmit` |
+| Script              | Description                    |
+| ------------------- | ------------------------------ |
+| `npm run preview`   | Preview the built frontend     |
+| `npm run clean`     | Remove `dist/` and `server.js` |
+| `npm run lint`      | Type-check with `tsc --noEmit` |
+| `npm test`          | Run the Vitest suite (149 tests) |
+| `npm run tauri:dev` | Run the Tauri desktop shell    |
 
 ## 🤖 AI Providers
 
@@ -99,13 +120,20 @@ AI features use **bring-your-own-key** providers configured in **Settings → AI
 
 ## ⚙️ Environment Variables
 
-| Variable            | Description                                                   | Default                              |
-| ------------------- | ------------------------------------------------------------- | ------------------------------------ |
-| `AI_ENCRYPTION_KEY` | Secret used to derive the AES key for provider-key encryption | `texforge-secret-encryption-key-32b` |
-| `NODE_ENV`          | `production` serves built assets from `dist/`                 | —                                    |
-| `DISABLE_HMR`       | Disables Vite HMR/file-watching (used in AI Studio)           | —                                    |
+| Variable                | Description                                                          | Default                              |
+| ----------------------- | ------------------------------------------------------------------- | ------------------------------------ |
+| `VITE_SUPABASE_URL`     | Supabase project URL                                                | —                                    |
+| `VITE_SUPABASE_ANON_KEY`| Supabase anon/public key (safe in the client; RLS protects data)    | —                                    |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only key for session management (§34) + chat-retention sweep (§40) | — (routes return honest 501s without it) |
+| `VITE_COLLAB_URL`       | Collab WebSocket URL (`ws(s)://host/collab`); derived from the server host on web | —      |
+| `RESEND_API_KEY`        | Transactional email for notifications (§31); optional               | —                                    |
+| `EMAIL_FROM`            | Sender address for notification emails                              | `Paperly <notifications@paperly.app>` |
+| `AI_ENCRYPTION_KEY`     | Secret used to derive the AES key for provider-key encryption       | `texforge-secret-encryption-key-32b` |
+| `NODE_ENV`              | `production` serves built assets from `dist/`                       | —                                    |
+| `DISABLE_HMR`           | Disables Vite HMR/file-watching (used in AI Studio)                 | —                                    |
 
-> ⚠️ Override `AI_ENCRYPTION_KEY` in production — do not ship with the default.
+> ⚠️ Override `AI_ENCRYPTION_KEY` in production — do not ship with the default. Keep
+> `SUPABASE_SERVICE_ROLE_KEY` server-side only — never in the browser bundle.
 
 ## ⌨️ Keyboard Shortcuts
 
