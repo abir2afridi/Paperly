@@ -29,6 +29,7 @@ import {
   Mail,
   FileWarning,
   HelpCircle,
+  FlaskConical,
 } from 'lucide-react';
 import { Project, CompilationResult, AppNotification } from '../types';
 
@@ -49,6 +50,7 @@ interface NavbarProps {
   onOpenHistory: () => void;
   onOpenShortcuts?: () => void;
   onOpenTour?: () => void;
+  onOpenResearch?: () => void;
   onToggleAiPanel: () => void;
   isAiPanelOpen: boolean;
   onToggleChatPanel: () => void;
@@ -79,6 +81,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenHistory,
   onOpenShortcuts,
   onOpenTour,
+  onOpenResearch,
   onToggleAiPanel,
   isAiPanelOpen,
   onToggleChatPanel,
@@ -341,6 +344,16 @@ export const Navbar: React.FC<NavbarProps> = ({
             title="Show onboarding tour"
           >
             <HelpCircle className="w-4 h-4 text-slate-700" />
+          </button>
+        )}
+
+        {onOpenResearch && (
+          <button
+            onClick={onOpenResearch}
+            className="p-1.5 text-slate-600 hover:text-[#D11111] hover:bg-red-50 transition-colors border border-transparent hover:border-red-200"
+            title="Research assistant (PDF → literature review, Semantic Scholar, fact-check)"
+          >
+            <FlaskConical className="w-4 h-4 text-slate-700" />
           </button>
         )}
 

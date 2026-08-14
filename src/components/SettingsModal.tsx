@@ -30,6 +30,7 @@ import {
   revokeSession,
 } from '../services/sessions';
 import { getChatRetentionDays, setChatRetentionDays } from '../services/db';
+import { isSpellCheckEnabled, setSpellCheckEnabled } from '../services/spellCheck';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -73,6 +74,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; msg: string }>>({});
   const [isExporting, setIsExporting] = useState(false);
   const [exportDone, setExportDone] = useState(false);
+  const [spellCheckEnabled, setSpellCheck] = useState(() => isSpellCheckEnabled());
 
   const handleExportAccountData = async () => {
     if (!onExportAccountData) return;
@@ -483,6 +485,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <span
                     className={`absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-all ${
                       autosaveEnabled ? 'left-7' : 'left-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-slate-50 border-2 border-slate-200">
+                <div>
+                  <span className="font-bold text-slate-900">LaTeX-aware spell check (§28)</span>
+                  <p className="text-slate-500 font-mono text-[11px]">
+                    {spellCheckEnabled
+                      ? 'On — squiggly underlines flag misspelled prose; commands, math and citations are skipped.'
+                      : 'Off — only compile diagnostics are shown in the editor.'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    const next = !spellCheckEnabled;
+                    setSpellCheck(next);
+                    setSpellCheckEnabled(next);
+                  }}
+                  className={`relative w-14 h-7 rounded-full transition-colors ${
+                    spellCheckEnabled ? 'bg-[#D11111]' : 'bg-slate-300'
+                  }`}
+                  title={spellCheckEnabled ? 'Turn spell check off' : 'Turn spell check on'}
+                >
+                  <span
+                    className={`absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-all ${
+                      spellCheckEnabled ? 'left-7' : 'left-0.5'
                     }`}
                   />
                 </button>

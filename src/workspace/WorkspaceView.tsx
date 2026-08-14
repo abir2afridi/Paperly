@@ -25,6 +25,7 @@ import { ChatAndActivity } from '../components/ChatAndActivity';
 import { TemplatesModal } from '../components/TemplatesModal';
 import { VersionHistoryModal } from '../components/VersionHistoryModal';
 import { ShortcutsModal } from '../components/ShortcutsModal';
+import { ResearchAssistantModal } from '../components/ResearchAssistantModal';
 import { AboutModal } from '../components/AboutModal';
 import { findMathSegmentAt, renderMathHtml } from '../services/mathPreview';
 import { parseBibtex } from '../services/bibParser';
@@ -249,6 +250,7 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [isResearchOpen, setIsResearchOpen] = useState(false);
 
   // Responsive layout: collapsed sidebar + PDF panel visibility
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
@@ -436,6 +438,7 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
         onOpenHistory={() => setIsHistoryOpen(true)}
         onOpenShortcuts={() => setIsShortcutsOpen(true)}
         onOpenTour={onOpenTour}
+        onOpenResearch={() => setIsResearchOpen(true)}
         onToggleAiPanel={() => setIsAiPanelOpen(!isAiPanelOpen)}
         isAiPanelOpen={isAiPanelOpen}
         onToggleChatPanel={() => setIsChatPanelOpen(!isChatPanelOpen)}
@@ -748,6 +751,13 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
       <ShortcutsModal
         isOpen={isShortcutsOpen}
         onClose={() => setIsShortcutsOpen(false)}
+      />
+
+      <ResearchAssistantModal
+        isOpen={isResearchOpen}
+        onClose={() => setIsResearchOpen(false)}
+        providers={providers}
+        onInsertLatex={onInsertLatex}
       />
 
       <AboutModal

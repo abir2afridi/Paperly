@@ -1,15 +1,55 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import Editor, { OnMount, BeforeMount, Monaco } from '@monaco-editor/react';
 import { Loader2 } from 'lucide-react';
 import type * as Y from 'yjs';
 import { MonacoBinding } from 'y-monaco';
 import { BibEntry, CompileDiagnostic } from '../types';
 import { CODE_THEMES, CodeThemeId } from '../services/codeThemeService';
+import { getSpellChecker, isSpellCheckEnabled, SpellIssue } from '../services/spellCheck';
 
 export interface MonacoEditorApi {
   jumpToLine: (line: number) => void;
   /** Cursor state (character offset + page position) for the KaTeX live preview (§20). */
   getCursorState: () => { offset: number; x: number; y: number } | null;
+}
+
+// §28 spell check: map a character offset to a {line, column} position.
+function buildLineStarts(content: string): number[] {
+  const starts = [0];
+  for (let i = 0; i < content.length; i++) {
+    if (content[i] === '\n') starts.push(i + 1);
+  }
+  return starts;
+}
+
+function offsetToPosition(lineStarts: number[], offset: number): { lineNumber: number; column: number } {
+  let lo = 0;
+  let hi = lineStarts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (lineStarts[mid] <= offset) lo = mid;
+    else hi = mid - 1;
+  }
+  return { lineNumber: lo + 1, column: offset - lineStarts[lo] + 1 };
+}
+
+function spellIssueToMarker(
+  issue: SpellIssue,
+  lineStarts: number[],
+  severity: { Warning: unknown; Info: unknown },
+): unknown {
+  const start = offsetToPosition(lineStarts, issue.start);
+  const end = offsetToPosition(lineStarts, issue.end);
+  const suggestionText =
+    issue.suggestions.length > 0 ? ` — did you mean: ${issue.suggestions.slice(0, 3).join(', ')}?` : '';
+  return {
+    startLineNumber: start.lineNumber,
+    startColumn: start.column,
+    endLineNumber: end.lineNumber,
+    endColumn: end.column,
+    message: `Misspelled word: "${issue.word}"${suggestionText}`,
+    severity: issue.suggestions.length > 0 ? severity.Warning : severity.Info,
+  };
 }
 
 interface MonacoEditorProps {
@@ -42,6 +82,7 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
 }) => {
   const editorRef = useRef<unknown>(null);
   const monacoRef = useRef<Monaco | null>(null);
+  const [editorMounted, setEditorMounted] = useState(false);
   const prevFilePathRef = useRef<string>(filePath);
   const collabRef = useRef(collab);
   const bindingRef = useRef<{ destroy: () => void } | null>(null);
@@ -485,6 +526,8 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
     // If a collab session already exists, bind the editor to the shared doc
     // immediately (the effect below covers sessions that arrive later).
     attachCollabBinding();
+
+    setEditorMounted(true);
   };
 
   // Clear the exposed API when the editor unmounts (e.g. switching to Visual mode)
@@ -520,6 +563,67 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
 
     monaco.editor.setModelMarkers(model as never, 'texforge', markers as never);
   }, [diagnostics, filePath]);
+
+  // LaTeX-aware spell check (§28): debounced, lazy dictionary, squiggly
+  // markers under owner 'spell'. Works for both controlled and collab models
+  // by reacting to model content changes directly.
+  useEffect(() => {
+    const monaco = monacoRef.current;
+    const editor = editorRef.current as {
+      getModel: () => {
+        onDidChangeContent: (cb: () => void) => { dispose: () => void };
+        getValue: () => string;
+      } | null;
+    } | null;
+    if (!monaco || !editor || !editorMounted) return;
+    const model = editor.getModel();
+    if (!model) return;
+
+    if (!isSpellCheckEnabled()) {
+      monaco.editor.setModelMarkers(model as never, 'spell', []);
+      return;
+    }
+
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const runSpellCheck = () => {
+      if (disposed) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        const current = editorRef.current as {
+          getModel: () => { getValue: () => string } | null;
+        } | null;
+        if (!current || !monacoRef.current) return;
+        const liveModel = current.getModel();
+        if (!liveModel) return;
+        const content = liveModel.getValue();
+        void getSpellChecker()
+          .then(api => {
+            if (disposed || !monacoRef.current) return;
+            if (editorRef.current === null) return;
+            const m = (editorRef.current as { getModel: () => unknown }).getModel();
+            if (m !== liveModel) return;
+            const issues = api.check(content);
+            const lineStarts = buildLineStarts(content);
+            const markers = issues.map(issue => spellIssueToMarker(issue, lineStarts, monacoRef.current!.MarkerSeverity));
+            monacoRef.current!.editor.setModelMarkers(liveModel as never, 'spell', markers as never);
+          })
+          .catch(() => {
+            // Dictionary failed to load (offline first run) — no markers.
+          });
+      }, 450);
+    };
+
+    runSpellCheck();
+    const subscription = model.onDidChangeContent(runSpellCheck);
+    return () => {
+      disposed = true;
+      if (timer) clearTimeout(timer);
+      subscription.dispose();
+      monaco.editor.setModelMarkers(model as never, 'spell', []);
+    };
+  }, [filePath, editorMounted, diagnostics]);
 
   // Handle dynamic theme change
   useEffect(() => {
