@@ -68,6 +68,8 @@ A full-stack, browser-based **LaTeX editor** with real-time PDF compilation, ric
 │                                  # ResearchAssistantModal, SettingsModal, modals, etc.
 ├── supabase/migrations/           # SQL migrations (chat retention, annotations, …)
 ├── public/                        # Static assets, PWA manifest + service worker
+├── .github/                       # Issue forms, PR template, workflows, labels,
+│                                  # CONTRIBUTING / SECURITY / CODE_OF_CONDUCT / SUPPORT
 └── dist/                          # Production build output
 ```
 
@@ -147,6 +149,17 @@ AI features use **bring-your-own-key** providers configured in **Settings → AI
 | `Ctrl/Cmd + Shift + T` | Table Generator      |
 | `Ctrl/Cmd + Shift + C` | Team Chat            |
 | `Ctrl/Cmd + /`         | Shortcuts Cheatsheet |
+
+## 🤝 Contributing
+
+Paperly is open source — every contribution counts, from bug reports to code.
+
+- **Community infrastructure** — structured issue forms (bug, feature, docs, security, accessibility, API, build, and more), PR template, and label system live in [`.github/`](.github/)
+- **Start here** — read [CONTRIBUTING.md](.github/CONTRIBUTING.md) for setup, branching strategy, commit convention, and the pull request process
+- **Report bugs / request features** — use the [issue chooser](https://github.com/abir2afridi/Paperly/issues/new/choose)
+- **Support** — questions and help go to [SUPPORT.md](.github/SUPPORT.md) or GitHub Discussions
+- **Code of Conduct** — [CODE_OF_CONDUCT.md](.github/CODE_OF_CONDUCT.md) applies in all community spaces
+- **Security** — report vulnerabilities privately via [SECURITY.md](.github/SECURITY.md) or GitHub Security Advisories — never as a public issue
 
 ## 📄 License
 
