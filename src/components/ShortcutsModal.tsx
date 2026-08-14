@@ -32,6 +32,13 @@ const SHORTCUTS: Shortcut[] = [
     description: 'Open LaTeX mathematical equation symbols and formula generator',
   },
   {
+    id: 'ctan-palette',
+    category: 'Tools & Modals',
+    action: 'CTAN Package Palette',
+    keys: ['Ctrl', 'Shift', 'P'],
+    description: 'Search the static CTAN package index and insert \\usepackage at the correct preamble position',
+  },
+  {
     id: 'ai-panel',
     category: 'Tools & Modals',
     action: 'Toggle AI Assistant Panel',

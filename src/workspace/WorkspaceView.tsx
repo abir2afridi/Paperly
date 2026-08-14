@@ -26,6 +26,7 @@ import { TemplatesModal } from '../components/TemplatesModal';
 import { VersionHistoryModal } from '../components/VersionHistoryModal';
 import { ShortcutsModal } from '../components/ShortcutsModal';
 import { AboutModal } from '../components/AboutModal';
+import { findMathSegmentAt, renderMathHtml } from '../services/mathPreview';
 import { parseBibtex } from '../services/bibParser';
 import { MenuEventPayload } from '../desktop/bridge';
 import { CollabStatus, CollabUser } from '../services/collab';
@@ -229,6 +230,13 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
     [currentUser, project?.id]
   );
 
+  // KaTeX live preview floating beside the cursor while typing math (§20).
+  const [mathPreview, setMathPreview] = useState<{ html: string; x: number; y: number } | null>(null);
+  const mathPreviewRef = useRef(mathPreview);
+  useEffect(() => {
+    mathPreviewRef.current = mathPreview;
+  }, [mathPreview]);
+
   // Panels & Modals Toggles
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
   const [isChatPanelOpen, setIsChatPanelOpen] = useState(false);
@@ -280,6 +288,36 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
   const activeFile = project.files.find(f => f.path === activeFilePath) || project.files[0];
   const bibFile = project.files.find(f => f.path.endsWith('.bib'));
   const bibEntries = bibFile && bibFile.content ? parseBibtex(bibFile.content) : [];
+
+  // KaTeX live preview polling — reads the cursor via the Monaco API while
+  // the cursor sits inside a math segment (§20).
+  useEffect(() => {
+    if (editorMode !== 'code') {
+      setMathPreview(null);
+      return;
+    }
+    const timer = setInterval(() => {
+      const api = editorApiRef.current as MonacoEditorApi & {
+        getCursorState?: () => { offset: number; x: number; y: number } | null;
+      };
+      const cursor = api?.getCursorState?.() ?? null;
+      const content = activeFile?.content ?? '';
+      if (!cursor || activeFile?.type !== 'TEX') {
+        if (mathPreviewRef.current) setMathPreview(null);
+        return;
+      }
+      const segment = findMathSegmentAt(content, cursor.offset);
+      if (!segment) {
+        if (mathPreviewRef.current) setMathPreview(null);
+        return;
+      }
+      const html = renderMathHtml(segment.math, segment.display);
+      const prev = mathPreviewRef.current;
+      if (prev && prev.html === html && prev.x === cursor.x && prev.y === cursor.y) return;
+      setMathPreview({ html, x: cursor.x, y: cursor.y + 6 });
+    }, 350);
+    return () => clearInterval(timer);
+  }, [editorMode, activeFile?.content, activeFile?.type]);
 
   // Route desktop-menu events that target workspace-local actions
   useEffect(() => {
@@ -592,6 +630,21 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
               />
             </div>
           </div>
+
+          {/* KaTeX live preview — floats beside the cursor while typing math (§20) */}
+          {mathPreview && (
+            <div
+              className="fixed z-40 pointer-events-none max-w-xs"
+              style={{ left: Math.min(mathPreview.x, window.innerWidth - 330), top: mathPreview.y }}
+            >
+              <div className="bg-white border-2 border-[#D11111] shadow-xl rounded-md px-3 py-2">
+                <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                  KaTeX Live Preview
+                </div>
+                <div className="overflow-x-auto" dangerouslySetInnerHTML={{ __html: mathPreview.html }} />
+              </div>
+            </div>
+          )}
         </main>
 
         {/* Right PDF.js Interactive Preview Panel */}

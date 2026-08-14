@@ -82,6 +82,7 @@ export const MathPalette: React.FC<MathPaletteProps> = ({
         __html: katex.renderToString(math, {
           throwOnError: false,
           displayMode: false,
+          output: 'htmlAndMathml',
         }),
       };
     } catch {
@@ -95,6 +96,7 @@ export const MathPalette: React.FC<MathPaletteProps> = ({
         __html: katex.renderToString(math, {
           throwOnError: false,
           displayMode: true,
+          output: 'htmlAndMathml',
         }),
       };
     } catch {

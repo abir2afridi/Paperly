@@ -8,6 +8,8 @@ import { CODE_THEMES, CodeThemeId } from '../services/codeThemeService';
 
 export interface MonacoEditorApi {
   jumpToLine: (line: number) => void;
+  /** Cursor state (character offset + page position) for the KaTeX live preview (§20). */
+  getCursorState: () => { offset: number; x: number; y: number } | null;
 }
 
 interface MonacoEditorProps {
@@ -435,6 +437,28 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
           current.revealLineInCenter(line);
           current.setPosition({ lineNumber: line, column: 1 });
           current.focus();
+        },
+        getCursorState: () => {
+          const current = editorRef.current as {
+            getPosition: () => { lineNumber: number; column: number } | null;
+            getModel: () => { getOffsetAt: (pos: { lineNumber: number; column: number }) => number } | null;
+            getScrolledVisiblePosition: (pos: { lineNumber: number; column: number }) => {
+              top: number;
+              left: number;
+              height: number;
+            } | null;
+            getDomNode: () => HTMLElement | null;
+          } | null;
+          if (!current) return null;
+          const position = current.getPosition();
+          const model = current.getModel();
+          if (!position || !model) return null;
+          const offset = model.getOffsetAt(position);
+          const visible = current.getScrolledVisiblePosition(position);
+          const domNode = current.getDomNode();
+          if (!visible || !domNode) return null;
+          const rect = domNode.getBoundingClientRect();
+          return { offset, x: rect.left + visible.left, y: rect.top + visible.top + visible.height };
         },
       };
     }
