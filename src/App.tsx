@@ -704,17 +704,9 @@ export default function App() {
   // Fetch AI providers from backend (or the Tauri bridge on desktop)
   const refreshProviders = useCallback(async () => {
     try {
-      if (isTauri()) {
-        setProviders(await loadProvidersFile());
-        return;
-      }
-      const res = await fetch('/api/ai/providers');
-      if (res.ok) {
-        const data = await res.json();
-        setProviders(data);
-      }
+      setProviders(await loadProvidersFile());
     } catch {
-      // Backend error fallback
+      // Backend error fallback (e.g. not signed in on web)
     }
   }, []);
 

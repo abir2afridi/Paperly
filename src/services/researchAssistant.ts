@@ -41,6 +41,37 @@ export async function extractPdfText(data: ArrayBuffer | Blob): Promise<PdfTextR
   }
 }
 
+// ---- Multi-paper excerpt combining (§42) ----
+
+export interface PaperExcerpt {
+  name: string;
+  excerpt: string;
+  pageCount: number;
+  wordCount: number;
+}
+
+const MAX_EXCERPT_PER_PAPER = 6000;
+const MAX_EXCERPT_TOTAL = 18000;
+
+/**
+ * Combine several extracted papers into one bounded source excerpt for the AI.
+ * Each paper contributes at most MAX_EXCERPT_PER_PAPER characters, and the
+ * combined payload never exceeds MAX_EXCERPT_TOTAL characters (papers are
+ * added in upload order, oldest first).
+ */
+export function combinePaperExcerpts(papers: PaperExcerpt[]): string {
+  let budget = MAX_EXCERPT_TOTAL;
+  const parts: string[] = [];
+  for (const paper of papers) {
+    const excerpt = paper.excerpt.slice(0, Math.min(MAX_EXCERPT_PER_PAPER, budget)).trim();
+    if (!excerpt) continue;
+    budget -= excerpt.length;
+    parts.push(`--- ${paper.name} ---\n${excerpt}`);
+    if (budget <= 0) break;
+  }
+  return parts.join('\n\n');
+}
+
 // ---- Semantic Scholar search (§43) ----
 
 export interface SemanticScholarPaper {

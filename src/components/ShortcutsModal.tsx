@@ -1,107 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Search, X, Command, Keyboard, Zap, Sparkles } from 'lucide-react';
-
-interface Shortcut {
-  id: string;
-  category: 'Compilation & Build' | 'Editor & Formatting' | 'Navigation & Views' | 'Tools & Modals';
-  action: string;
-  keys: string[];
-  description: string;
-}
-
-const SHORTCUTS: Shortcut[] = [
-  {
-    id: 'compile',
-    category: 'Compilation & Build',
-    action: 'Compile LaTeX Project',
-    keys: ['Ctrl', 'Enter'],
-    description: 'Trigger instant WebAssembly pdfTeX compilation and update PDF view',
-  },
-  {
-    id: 'shortcuts',
-    category: 'Navigation & Views',
-    action: 'Keyboard Shortcuts Cheatsheet',
-    keys: ['Ctrl', '/'],
-    description: 'Toggle this interactive searchable shortcuts overlay modal',
-  },
-  {
-    id: 'math',
-    category: 'Tools & Modals',
-    action: 'Math & Symbol Palette',
-    keys: ['Ctrl', 'M'],
-    description: 'Open LaTeX mathematical equation symbols and formula generator',
-  },
-  {
-    id: 'ctan-palette',
-    category: 'Tools & Modals',
-    action: 'CTAN Package Palette',
-    keys: ['Ctrl', 'Shift', 'P'],
-    description: 'Search the static CTAN package index and insert \\usepackage at the correct preamble position',
-  },
-  {
-    id: 'ai-panel',
-    category: 'Tools & Modals',
-    action: 'Toggle AI Assistant Panel',
-    keys: ['Ctrl', 'K'],
-    description: 'Open AI Assistant for LaTeX error debugging, polishing, and equation building',
-  },
-  {
-    id: 'doi-modal',
-    category: 'Tools & Modals',
-    action: 'DOI Citation Import',
-    keys: ['Ctrl', 'Shift', 'D'],
-    description: 'Lookup BibTeX citations by DOI or PubMed ID and append to references.bib',
-  },
-  {
-    id: 'table-modal',
-    category: 'Tools & Modals',
-    action: 'Table Generator Modal',
-    keys: ['Ctrl', 'Shift', 'T'],
-    description: 'Interactive visual spreadsheet matrix to clean LaTeX table generator',
-  },
-  {
-    id: 'save',
-    category: 'Compilation & Build',
-    action: 'Save Version Checkpoint',
-    keys: ['Ctrl', 'S'],
-    description: 'Save current workspace files into project version snapshot timeline',
-  },
-  {
-    id: 'search-editor',
-    category: 'Editor & Formatting',
-    action: 'Find & Replace',
-    keys: ['Ctrl', 'F'],
-    description: 'Find and replace text strings within Monaco code editor',
-  },
-  {
-    id: 'chat-panel',
-    category: 'Navigation & Views',
-    action: 'Toggle Team Discussion Stream',
-    keys: ['Ctrl', 'Shift', 'C'],
-    description: 'Open slide-out peer review discussion and real-time team stream',
-  },
-  {
-    id: 'bold-text',
-    category: 'Editor & Formatting',
-    action: 'Bold Text (\\textbf)',
-    keys: ['Ctrl', 'B'],
-    description: 'Wrap selected text in LaTeX \\textbf{...} command',
-  },
-  {
-    id: 'italic-text',
-    category: 'Editor & Formatting',
-    action: 'Italic Text (\\textit)',
-    keys: ['Ctrl', 'I'],
-    description: 'Wrap selected text in LaTeX \\textit{...} command',
-  },
-  {
-    id: 'history-modal',
-    category: 'Navigation & Views',
-    action: 'Version History Timeline',
-    keys: ['Ctrl', 'H'],
-    description: 'Inspect saved document checkpoints and restore previous source code diffs',
-  },
-];
+import { Search, X, Command, Keyboard, Sparkles } from 'lucide-react';
+import { SHORTCUTS, SHORTCUT_CATEGORIES } from '../services/shortcutsRegistry';
 
 interface ShortcutsModalProps {
   isOpen: boolean;
@@ -124,7 +23,7 @@ export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({ isOpen, onClose 
 
   if (!isOpen) return null;
 
-  const categories = ['All', 'Compilation & Build', 'Editor & Formatting', 'Navigation & Views', 'Tools & Modals'];
+  const categories = ['All', ...SHORTCUT_CATEGORIES];
 
   const filteredShortcuts = SHORTCUTS.filter(s => {
     const query = searchQuery.toLowerCase().trim();

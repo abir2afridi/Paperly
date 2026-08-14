@@ -19,6 +19,8 @@ import {
   papersToBibtex,
   searchSemanticScholar,
   SemanticScholarPaper,
+  PaperExcerpt,
+  combinePaperExcerpts,
   buildLiteratureReviewPrompt,
   buildFactCheckPrompt,
 } from '../services/researchAssistant';
@@ -43,10 +45,7 @@ export const ResearchAssistantModal: React.FC<ResearchAssistantModalProps> = ({
   providers,
   onInsertLatex,
 }) => {
-  const [pdfName, setPdfName] = useState('');
-  const [pdfExcerpt, setPdfExcerpt] = useState('');
-  const [pdfWordCount, setPdfWordCount] = useState(0);
-  const [pdfPages, setPdfPages] = useState(0);
+  const [pdfs, setPdfs] = useState<PaperExcerpt[]>([]);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState('');
 
@@ -78,26 +77,39 @@ export const ResearchAssistantModal: React.FC<ResearchAssistantModalProps> = ({
 
   const providerId = providers.find(p => p.isDefault)?.id ?? providers[0]?.id;
 
-  const handlePdfFile = async (file: File) => {
+  const combinedExcerpt = combinePaperExcerpts(pdfs);
+
+  const handlePdfFiles = async (files: File[]) => {
+    if (files.length === 0) return;
     setExtracting(true);
     setExtractError('');
     setNotice('');
     try {
-      const data = await file.arrayBuffer();
-      const result = await extractPdfText(data);
-      setPdfName(file.name);
-      setPdfExcerpt(result.text.slice(0, 6000));
-      setPdfWordCount(result.wordCount);
-      setPdfPages(result.pageCount);
-      if (!query) {
-        const firstLine = result.text.split(/\n/).find(l => l.trim().length > 15);
+      const added: PaperExcerpt[] = [];
+      for (const file of files) {
+        const data = await file.arrayBuffer();
+        const result = await extractPdfText(data);
+        added.push({
+          name: file.name,
+          excerpt: result.text.slice(0, 6000),
+          pageCount: result.pageCount,
+          wordCount: result.wordCount,
+        });
+      }
+      setPdfs(prev => [...prev, ...added]);
+      if (added.length > 0 && !query) {
+        const firstLine = added[0].excerpt.split(/\n/).find(l => l.trim().length > 15);
         if (firstLine) setQuery(firstLine.trim().slice(0, 80));
       }
     } catch (err) {
-      setExtractError(err instanceof Error ? err.message : 'Could not read the PDF.');
+      setExtractError(err instanceof Error ? err.message : 'Could not read one of the PDFs.');
     } finally {
       setExtracting(false);
     }
+  };
+
+  const removePaper = (name: string) => {
+    setPdfs(prev => prev.filter(p => p.name !== name));
   };
 
   const handleSearch = async () => {
@@ -144,11 +156,11 @@ export const ResearchAssistantModal: React.FC<ResearchAssistantModalProps> = ({
     try {
       const chosen = papers.filter(p => selected.has(p.paperId) || selected.size === 0);
       const prompt = buildLiteratureReviewPrompt({
-        topic: query.trim() || pdfName || 'Research topic',
-        sourceExcerpt: pdfExcerpt,
+        topic: query.trim() || pdfs[0]?.name?.replace(/\.pdf$/i, '') || 'Research topic',
+        sourceExcerpt: combinedExcerpt,
         papers: selected.size === 0 ? papers : chosen,
       });
-      const result = await aiGenerate(providerId, prompt, pdfExcerpt);
+      const result = await aiGenerate(providerId, prompt, combinedExcerpt);
       setGenerated(result.result);
       setLastAction('review');
       setNotice('');
@@ -169,8 +181,8 @@ export const ResearchAssistantModal: React.FC<ResearchAssistantModalProps> = ({
     setGenerating(true);
     setGenerationError('');
     try {
-      const prompt = buildFactCheckPrompt(claim, pdfExcerpt || 'No source PDF uploaded — answer from general knowledge.');
-      const result = await aiGenerate(providerId, prompt, pdfExcerpt);
+      const prompt = buildFactCheckPrompt(claim, combinedExcerpt || 'No source PDF uploaded — answer from general knowledge.');
+      const result = await aiGenerate(providerId, prompt, combinedExcerpt);
       setGenerated(result.result);
       setLastAction('factcheck');
       setNotice('');
@@ -212,19 +224,20 @@ export const ResearchAssistantModal: React.FC<ResearchAssistantModalProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
-          {/* Step 1: upload PDF */}
+          {/* Step 1: upload PDFs */}
           <section className="space-y-2">
             <h4 className="font-bold text-slate-300 text-[11px] uppercase tracking-wider flex items-center space-x-2">
-              <FileText className="w-4 h-4" /> 1 · Upload a paper (optional)
+              <FileText className="w-4 h-4" /> 1 · Upload papers (optional, multiple allowed)
             </h4>
             <input
               ref={fileInputRef}
               type="file"
               accept="application/pdf,.pdf"
+              multiple
               className="hidden"
               onChange={e => {
-                const file = e.target.files?.[0];
-                if (file) void handlePdfFile(file);
+                const files = Array.from(e.target.files ?? []) as File[];
+                if (files.length > 0) void handlePdfFiles(files);
                 e.target.value = '';
               }}
             />
@@ -235,12 +248,40 @@ export const ResearchAssistantModal: React.FC<ResearchAssistantModalProps> = ({
             >
               {extracting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
               <span className="text-sm font-bold">
-                {extracting ? 'Extracting text…' : pdfName ? `Loaded: ${pdfName}` : 'Click to upload a PDF paper'}
+                {extracting
+                  ? 'Extracting text…'
+                  : pdfs.length > 0
+                    ? `Loaded ${pdfs.length} paper${pdfs.length === 1 ? '' : 's'} — click to add more`
+                    : 'Click to upload one or more PDF papers'}
               </span>
             </button>
-            {pdfWordCount > 0 && (
+            {pdfs.length > 0 && (
+              <div className="border-2 border-slate-800 divide-y divide-slate-800 max-h-40 overflow-y-auto">
+                {pdfs.map(p => (
+                  <div key={p.name} className="flex items-center justify-between p-2.5 bg-slate-800/40">
+                    <div className="flex items-center space-x-2 min-w-0">
+                      <FileText className="w-3.5 h-3.5 text-[#D11111] shrink-0" />
+                      <span className="text-slate-200 text-[12px] font-bold truncate">{p.name}</span>
+                    </div>
+                    <div className="flex items-center space-x-3 shrink-0">
+                      <span className="text-slate-400 text-[11px] font-mono">
+                        {p.wordCount.toLocaleString()} words · {p.pageCount} pages
+                      </span>
+                      <button
+                        onClick={() => removePaper(p.name)}
+                        className="text-slate-500 hover:text-[#D11111]"
+                        title="Remove paper"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {pdfs.length > 0 && (
               <p className="text-slate-400 text-[11px] font-mono">
-                {pdfWordCount.toLocaleString()} words · {pdfPages} pages — excerpt ready for the AI
+                {combinePaperExcerpts(pdfs).length.toLocaleString()} characters of source text ready for the AI
               </p>
             )}
             {extractError && <p className="text-red-400 text-[11px] font-mono">{extractError}</p>}
@@ -348,7 +389,7 @@ export const ResearchAssistantModal: React.FC<ResearchAssistantModalProps> = ({
               >
                 <span className="block font-bold text-slate-100 text-[13px]">Fact-check a claim</span>
                 <span className="block text-slate-500 text-[11px] mt-1">
-                  §43 · SUPPORTED / REFUTED / UNCERTAIN against the uploaded source
+                  §43 · SUPPORTED / REFUTED / UNCERTAIN against the uploaded source(s)
                 </span>
               </button>
             </div>

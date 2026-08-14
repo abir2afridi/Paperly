@@ -7,11 +7,24 @@
  */
 import type { AIProviderConfig } from '../types';
 import { isTauri } from '../desktop/bridge';
+import { supabase } from './supabase';
 
 // ---- Provider persistence ----
 
+async function authHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase!.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error('Not signed in. Sign in to use AI features.');
+  return { Authorization: `Bearer ${token}` };
+}
+
 export async function loadProvidersFile(): Promise<AIProviderConfig[]> {
-  if (!isTauri()) return [];
+  if (!isTauri()) {
+    const headers = await authHeaders();
+    const res = await fetch('/api/ai/providers', { headers });
+    if (!res.ok) throw new Error(res.status === 401 ? 'Not signed in. Sign in to manage AI providers.' : 'Failed to load AI providers.');
+    return res.json();
+  }
   const { invoke } = await import('@tauri-apps/api/core');
   const raw = await invoke<string>('read_providers_file').catch(() => '[]');
   try {
@@ -41,11 +54,11 @@ export async function createProvider(input: {
   }
   const res = await fetch('/api/ai/providers', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify(input),
   });
   if (!res.ok) {
-    throw new Error('Failed to create AI provider.');
+    throw new Error(res.status === 401 ? 'Not signed in. Sign in to manage AI providers.' : 'Failed to create AI provider.');
   }
   return res.json();
 }
@@ -56,7 +69,13 @@ export async function deleteProvider(id: string): Promise<void> {
     await invoke('delete_provider', { id });
     return;
   }
-  await fetch(`/api/ai/providers/${id}`, { method: 'DELETE' });
+  const res = await fetch(`/api/ai/providers/${id}`, {
+    method: 'DELETE',
+    headers: await authHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(res.status === 401 ? 'Not signed in. Sign in to manage AI providers.' : 'Failed to delete AI provider.');
+  }
 }
 
 export async function aiTestProvider(providerId: string): Promise<{ latencyMs: number; message: string }> {
@@ -64,7 +83,10 @@ export async function aiTestProvider(providerId: string): Promise<{ latencyMs: n
     const { invoke } = await import('@tauri-apps/api/core');
     return invoke('ai_test_provider', { providerId });
   }
-  const res = await fetch(`/api/ai/providers/${providerId}/test`, { method: 'POST' });
+  const res = await fetch(`/api/ai/providers/${providerId}/test`, {
+    method: 'POST',
+    headers: await authHeaders(),
+  });
   const data = await res.json();
   if (!res.ok) {
     throw new Error(data.error || 'Connection test failed.');
@@ -90,12 +112,12 @@ export async function aiGenerate(
   }
   const res = await fetch('/api/ai/generate', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify({ providerId, prompt, context }),
   });
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(data.error || 'AI generation failed.');
+    throw new Error(data.error || (res.status === 401 ? 'Not signed in. Sign in to use AI features.' : 'AI generation failed.'));
   }
   return { result: data.result, providerModel: data.providerModel };
 }

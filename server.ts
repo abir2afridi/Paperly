@@ -1,16 +1,21 @@
 import express from 'express';
 import path from 'path';
-import fs from 'fs';
 import crypto from 'crypto';
 import http from 'http';
 import { createServer as createViteServer } from 'vite';
 import { WebSocketServer } from 'ws';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { setContentInitializor, setupWSConnection } from '@y/websocket-server/utils';
 import { sanitizeProjectFilePath } from './src/services/zipSecurity';
 import { createRateLimiter, clientIp } from './src/services/rateLimit';
 import { renderEmailTemplate, sendEmailViaResend } from './src/services/emailTemplates';
 import { buildProviderAdapter } from './src/services/aiProviderAdapter';
+import {
+  ProviderConfigRow,
+  maskApiKey,
+  resolveDefaultProvider,
+  sanitizeProviderConfig,
+} from './src/services/aiProviderConfig';
 import 'dotenv/config';
 
 const app = express();
@@ -69,12 +74,10 @@ function decryptText(encryptedPayload: string): string {
   return decrypted;
 }
 
-function maskApiKey(key: string): string {
-  if (!key || key.length < 6) return '••••••••';
-  return key.slice(0, 3) + '••••••••' + key.slice(-4);
-}
+// AI provider configurations are stored per-user in Supabase
+// (`ai_provider_configs`, §8A). The plaintext API key never leaves the
+// server; `api_key_enc` is AES-GCM encrypted with AI_ENCRYPTION_KEY.
 
-// In-memory data store for AI Provider configurations
 interface ServerAIProvider {
   id: string;
   userId: string;
@@ -92,32 +95,72 @@ interface ServerAIProvider {
   lastError?: string;
 }
 
-const aiProvidersStore: ServerAIProvider[] = [];
-
-// Persistent storage for AI provider configs (apiKeyEnc is AES-GCM encrypted)
-const PROVIDERS_FILE = path.join(process.cwd(), '.texforge-ai-providers.json');
-
-function saveProviders(): void {
-  try {
-    fs.writeFileSync(PROVIDERS_FILE, JSON.stringify(aiProvidersStore, null, 2), 'utf8');
-  } catch (err) {
-    console.error('Failed to persist AI providers:', err);
-  }
+function mapRowToServer(row: ProviderConfigRow): ServerAIProvider {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    label: row.label,
+    providerType: row.provider_type,
+    baseUrl: row.base_url,
+    apiKeyEnc: row.api_key_enc,
+    model: row.model,
+    extraHeadersJson: row.extra_headers_json ?? undefined,
+    temperature: row.temperature ?? undefined,
+    maxTokens: row.max_tokens ?? undefined,
+    isDefault: row.is_default,
+    isVerified: row.is_verified,
+    lastTestedAt: row.last_tested_at ?? undefined,
+    lastError: row.last_error ?? undefined,
+  };
 }
 
-function loadProviders(): void {
-  try {
-    if (!fs.existsSync(PROVIDERS_FILE)) return;
-    const raw = JSON.parse(fs.readFileSync(PROVIDERS_FILE, 'utf8'));
-    if (Array.isArray(raw)) {
-      aiProvidersStore.splice(0, aiProvidersStore.length, ...raw);
-    }
-  } catch (err) {
-    console.error('Failed to load AI providers:', err);
-  }
+// ---- Supabase-backed per-user storage helpers ----
+
+function requireSupabaseEnv(): boolean {
+  return Boolean(process.env.VITE_SUPABASE_URL && process.env.VITE_SUPABASE_ANON_KEY);
 }
 
-loadProviders();
+/** Authenticates the Bearer session token and returns a user-scoped client. */
+async function authenticateUser(
+  req: express.Request,
+): Promise<{ client: SupabaseClient; userId: string } | null> {
+  if (!requireSupabaseEnv()) return null;
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  if (!token) return null;
+  const sb = createClient(process.env.VITE_SUPABASE_URL || '', process.env.VITE_SUPABASE_ANON_KEY || '', {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: userData, error: userError } = await sb.auth.getUser();
+  if (userError || !userData.user) return null;
+  return { client: sb, userId: userData.user.id };
+}
+
+async function fetchUserProviders(sb: SupabaseClient, userId: string): Promise<ProviderConfigRow[]> {
+  const { data, error } = await sb
+    .from('ai_provider_configs')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data || []) as ProviderConfigRow[];
+}
+
+/** Clears is_default on every provider except the one being kept (if any). */
+async function clearOtherDefaults(
+  sb: SupabaseClient,
+  userId: string,
+  keepId?: string,
+): Promise<void> {
+  const { error } = await sb
+    .from('ai_provider_configs')
+    .update({ is_default: false })
+    .eq('user_id', userId)
+    .neq('id', keepId ?? '')
+    .eq('is_default', true);
+  if (error) throw error;
+}
 
 // ================= API ROUTES =================
 
@@ -183,138 +226,162 @@ app.post('/api/email/notify', async (req, res) => {
   }
 });
 
-// GET AI Providers
-app.get('/api/ai/providers', (_req, res) => {
-  const sanitized = aiProvidersStore.map(p => {
-    let rawKey = '';
-    try {
-      rawKey = decryptText(p.apiKeyEnc);
-    } catch {
-      rawKey = '';
-    }
-    return {
-      id: p.id,
-      label: p.label,
-      providerType: p.providerType,
-      baseUrl: p.baseUrl,
-      apiKey: maskApiKey(rawKey),
-      model: p.model,
-      extraHeadersJson: p.extraHeadersJson,
-      temperature: p.temperature,
-      maxTokens: p.maxTokens,
-      isDefault: p.isDefault,
-      isVerified: p.isVerified,
-      lastTestedAt: p.lastTestedAt,
-      lastError: p.lastError,
-    };
-  });
-  res.json(sanitized);
+// GET AI Providers (per-user, authenticated)
+app.get('/api/ai/providers', async (req, res) => {
+  const auth = await authenticateUser(req);
+  if (!auth) return res.status(401).json({ error: 'Authentication required. Sign in to manage AI providers.' });
+
+  try {
+    const rows = await fetchUserProviders(auth.client, auth.userId);
+    res.json(rows.map(row => sanitizeProviderConfig(row, decryptText)));
+  } catch (err) {
+    console.error('[ai/providers] Listing failed:', err);
+    res.status(500).json({ error: 'Failed to load AI providers.' });
+  }
 });
 
-// POST Create AI Provider
-app.post('/api/ai/providers', (req, res) => {
+// POST Create AI Provider (per-user, authenticated)
+app.post('/api/ai/providers', async (req, res) => {
   if (!aiProviderMutateLimiter.allow(clientIp(req))) {
     return res.status(429).json({ error: 'Too many requests. Please try again in a minute.' });
   }
+  const auth = await authenticateUser(req);
+  if (!auth) return res.status(401).json({ error: 'Authentication required. Sign in to manage AI providers.' });
+
   const { label, providerType, baseUrl, apiKey, model, extraHeadersJson, temperature, maxTokens, isDefault } = req.body;
 
   if (!label || !baseUrl || !apiKey || !model) {
     return res.status(400).json({ error: 'Label, Base URL, API Key, and Model are required.' });
   }
 
-  if (isDefault) {
-    aiProvidersStore.forEach(p => (p.isDefault = false));
+  try {
+    const rows = await fetchUserProviders(auth.client, auth.userId);
+    const makeDefault = Boolean(isDefault || rows.length === 0);
+    if (makeDefault) await clearOtherDefaults(auth.client, auth.userId);
+
+    const apiKeyEnc = encryptText(apiKey);
+    const { data, error } = await auth.client
+      .from('ai_provider_configs')
+      .insert({
+        user_id: auth.userId,
+        label,
+        provider_type: providerType || 'openai',
+        base_url: baseUrl,
+        api_key_enc: apiKeyEnc,
+        model,
+        extra_headers_json: extraHeadersJson ?? null,
+        temperature: temperature ?? null,
+        max_tokens: maxTokens ?? null,
+        is_default: makeDefault,
+        is_verified: false,
+      })
+      .select()
+      .single();
+    if (error || !data) throw error || new Error('Insert returned no row.');
+
+    res.json({
+      id: data.id,
+      label: data.label,
+      providerType: data.provider_type,
+      baseUrl: data.base_url,
+      apiKey: maskApiKey(apiKey),
+      model: data.model,
+      isDefault: data.is_default,
+      isVerified: false,
+    });
+  } catch (err) {
+    console.error('[ai/providers] Create failed:', err);
+    res.status(500).json({ error: 'Failed to save AI provider.' });
   }
-
-  const id = `provider-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-  const apiKeyEnc = encryptText(apiKey);
-
-  const newProvider: ServerAIProvider = {
-    id,
-    userId: 'default-user',
-    label,
-    providerType: providerType || 'openai',
-    baseUrl,
-    apiKeyEnc,
-    model,
-    extraHeadersJson,
-    temperature,
-    maxTokens,
-    isDefault: Boolean(isDefault || aiProvidersStore.length === 0),
-    isVerified: false,
-  };
-
-  aiProvidersStore.push(newProvider);
-  saveProviders();
-
-  res.json({
-    id: newProvider.id,
-    label: newProvider.label,
-    providerType: newProvider.providerType,
-    baseUrl: newProvider.baseUrl,
-    apiKey: maskApiKey(apiKey),
-    model: newProvider.model,
-    isDefault: newProvider.isDefault,
-    isVerified: false,
-  });
 });
-
-// PATCH Update AI Provider
-app.patch('/api/ai/providers/:id', (req, res) => {
+// PATCH Update AI Provider (per-user, authenticated)
+app.patch('/api/ai/providers/:id', async (req, res) => {
   if (!aiProviderMutateLimiter.allow(clientIp(req))) {
     return res.status(429).json({ error: 'Too many requests. Please try again in a minute.' });
   }
-  const provider = aiProvidersStore.find(p => p.id === req.params.id);
-  if (!provider) {
-    return res.status(404).json({ error: 'AI Provider configuration not found.' });
-  }
+  const auth = await authenticateUser(req);
+  if (!auth) return res.status(401).json({ error: 'Authentication required. Sign in to manage AI providers.' });
 
   const { label, providerType, baseUrl, apiKey, model, extraHeadersJson, temperature, maxTokens, isDefault } = req.body;
 
-  if (label) provider.label = label;
-  if (providerType) provider.providerType = providerType;
-  if (baseUrl) provider.baseUrl = baseUrl;
-  if (model) provider.model = model;
-  if (extraHeadersJson !== undefined) provider.extraHeadersJson = extraHeadersJson;
-  if (temperature !== undefined) provider.temperature = temperature;
-  if (maxTokens !== undefined) provider.maxTokens = maxTokens;
+  try {
+    const rows = await fetchUserProviders(auth.client, auth.userId);
+    const provider = rows.find(p => p.id === req.params.id);
+    if (!provider) {
+      return res.status(404).json({ error: 'AI Provider configuration not found.' });
+    }
 
-  if (apiKey && apiKey.trim().length > 0) {
-    provider.apiKeyEnc = encryptText(apiKey);
-    provider.isVerified = false; // Require re-test
+    if (isDefault) await clearOtherDefaults(auth.client, auth.userId, provider.id);
+
+    const updates: Record<string, unknown> = {};
+    if (label) updates.label = label;
+    if (providerType) updates.provider_type = providerType;
+    if (baseUrl) updates.base_url = baseUrl;
+    if (model) updates.model = model;
+    if (extraHeadersJson !== undefined) updates.extra_headers_json = extraHeadersJson;
+    if (temperature !== undefined) updates.temperature = temperature;
+    if (maxTokens !== undefined) updates.max_tokens = maxTokens;
+    if (isDefault) updates.is_default = true;
+    if (apiKey && apiKey.trim().length > 0) {
+      updates.api_key_enc = encryptText(apiKey);
+      updates.is_verified = false; // Require re-test
+    }
+
+    const { error } = await auth.client
+      .from('ai_provider_configs')
+      .update(updates)
+      .eq('id', provider.id)
+      .eq('user_id', auth.userId);
+    if (error) throw error;
+
+    res.json({ success: true, id: provider.id });
+  } catch (err) {
+    console.error('[ai/providers] Update failed:', err);
+    res.status(500).json({ error: 'Failed to update AI provider.' });
   }
-
-  if (isDefault) {
-    aiProvidersStore.forEach(p => (p.isDefault = false));
-    provider.isDefault = true;
-  }
-
-  saveProviders();
-
-  res.json({ success: true, id: provider.id });
 });
 
-// DELETE AI Provider
-app.delete('/api/ai/providers/:id', (req, res) => {
+// DELETE AI Provider (per-user, authenticated)
+app.delete('/api/ai/providers/:id', async (req, res) => {
   if (!aiProviderMutateLimiter.allow(clientIp(req))) {
     return res.status(429).json({ error: 'Too many requests. Please try again in a minute.' });
   }
-  const idx = aiProvidersStore.findIndex(p => p.id === req.params.id);
-  if (idx !== -1) {
-    aiProvidersStore.splice(idx, 1);
+  const auth = await authenticateUser(req);
+  if (!auth) return res.status(401).json({ error: 'Authentication required. Sign in to manage AI providers.' });
+
+  try {
+    const { error } = await auth.client
+      .from('ai_provider_configs')
+      .delete()
+      .eq('id', req.params.id)
+      .eq('user_id', auth.userId);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[ai/providers] Delete failed:', err);
+    res.status(500).json({ error: 'Failed to delete AI provider.' });
   }
-  saveProviders();
-  res.json({ success: true });
 });
 
-// POST Test Connection
+// POST Test Connection (per-user, authenticated)
 app.post('/api/ai/providers/:id/test', async (req, res) => {
   if (!aiTestLimiter.allow(clientIp(req))) {
     return res.status(429).json({ error: 'Too many requests. Please try again in a minute.' });
   }
-  const provider = aiProvidersStore.find(p => p.id === req.params.id);
-  if (!provider) {
-    return res.status(404).json({ error: 'AI Provider configuration not found.' });
+  const auth = await authenticateUser(req);
+  if (!auth) return res.status(401).json({ error: 'Authentication required. Sign in to manage AI providers.' });
+
+  let provider: ServerAIProvider;
+  try {
+    const rows = await fetchUserProviders(auth.client, auth.userId);
+    const row = rows.find(p => p.id === req.params.id);
+    if (!row) {
+      return res.status(404).json({ error: 'AI Provider configuration not found.' });
+    }
+    provider = mapRowToServer(row);
+  } catch (err) {
+    console.error('[ai/providers] Test lookup failed:', err);
+    return res.status(500).json({ error: 'Failed to load AI provider.' });
   }
 
   let decryptedKey = '';
@@ -342,10 +409,17 @@ app.post('/api/ai/providers/:id/test', async (req, res) => {
     const testResponseText = await adapter.testConnection();
 
     const latencyMs = Date.now() - startTime;
-    provider.isVerified = true;
-    provider.lastTestedAt = new Date().toISOString();
-    provider.lastError = undefined;
-    saveProviders();
+
+    const { error: updateError } = await auth.client
+      .from('ai_provider_configs')
+      .update({
+        is_verified: true,
+        last_tested_at: new Date().toISOString(),
+        last_error: null,
+      })
+      .eq('id', provider.id)
+      .eq('user_id', auth.userId);
+    if (updateError) console.error('[ai/providers] Test-result persist failed:', updateError);
 
     res.json({
       ok: true,
@@ -355,10 +429,17 @@ app.post('/api/ai/providers/:id/test', async (req, res) => {
     });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    provider.isVerified = false;
-    provider.lastError = errorMsg;
-    provider.lastTestedAt = new Date().toISOString();
-    saveProviders();
+
+    const { error: updateError } = await auth.client
+      .from('ai_provider_configs')
+      .update({
+        is_verified: false,
+        last_error: errorMsg,
+        last_tested_at: new Date().toISOString(),
+      })
+      .eq('id', provider.id)
+      .eq('user_id', auth.userId);
+    if (updateError) console.error('[ai/providers] Test-result persist failed:', updateError);
 
     res.status(400).json({
       ok: false,
@@ -371,22 +452,29 @@ app.post('/api/ai/providers/:id/test', async (req, res) => {
 // (kept for backward compatibility with older code paths; new code goes through
 // buildProviderAdapter in src/services/aiProviderAdapter.ts).
 
-// POST Generate AI completions for TeXForge actions
+// POST Generate AI completions for TeXForge actions (per-user, authenticated)
 app.post('/api/ai/generate', async (req, res) => {
   if (!aiGenerateLimiter.allow(clientIp(req))) {
     return res.status(429).json({ error: 'Too many requests. Please try again in a minute.' });
   }
+  const auth = await authenticateUser(req);
+  if (!auth) return res.status(401).json({ error: 'Authentication required. Sign in to use AI features.' });
+
   const { providerId, prompt, context } = req.body;
 
-  let provider = aiProvidersStore.find(p => p.id === providerId);
-  if (!provider) {
-    provider = aiProvidersStore.find(p => p.isDefault) || aiProvidersStore[0];
-  }
-
-  if (!provider) {
-    return res.status(400).json({
-      error: 'No AI Provider configured. Please add an API key in Settings -> AI Providers.',
-    });
+  let provider: ServerAIProvider;
+  try {
+    const rows = await fetchUserProviders(auth.client, auth.userId);
+    const chosen = resolveDefaultProvider(rows, providerId);
+    if (!chosen) {
+      return res.status(400).json({
+        error: 'No AI Provider configured. Please add an API key in Settings -> AI Providers.',
+      });
+    }
+    provider = mapRowToServer(chosen);
+  } catch (err) {
+    console.error('[ai/generate] Provider lookup failed:', err);
+    return res.status(500).json({ error: 'Failed to load AI provider configuration.' });
   }
 
   let decryptedKey = '';
@@ -647,7 +735,7 @@ function startChatRetentionSweep(intervalMs = 15 * 60_000): void {
 
 const COLLAB_PATH = '/collab';
 const collabTokenByRoom = new Map<string, string>();
-const collabClientByToken = new Map<string, ReturnType<typeof createClient>>();
+const collabClientByToken = new Map<string, SupabaseClient>();
 
 const COLLAB_SUPABASE_URL = process.env.VITE_SUPABASE_URL || '';
 const COLLAB_SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || '';

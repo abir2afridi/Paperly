@@ -44,7 +44,7 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
   onTaskComplete,
 }) => {
   const [selectedProviderId, setSelectedProviderId] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'explain' | 'fix' | 'rewrite' | 'abstract'>('explain');
+  const [activeTab, setActiveTab] = useState<'explain' | 'fix' | 'rewrite' | 'abstract' | 'nl2tex'>('explain');
   const [promptInput, setPromptInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiResult, setAiResult] = useState<string | null>(null);
@@ -62,6 +62,8 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
 
   const defaultProvider = providers.find(p => p.isDefault) || providers[0];
   const activeProvider = providers.find(p => p.id === selectedProviderId) || defaultProvider;
+  // §8A: verified providers sort first in the dropdown.
+  const sortedProviders = [...providers].sort((a, b) => Number(b.isVerified) - Number(a.isVerified));
 
   const handleSendChat = async () => {
     const question = chatInput.trim();
@@ -112,6 +114,8 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
       prompt = `Improve and polish the language of the following LaTeX section for academic publication: ${promptInput}`;
     } else if (type === 'abstract') {
       prompt = `Generate a concise 150-word academic abstract for this LaTeX document based on the introduction and sections.`;
+    } else if (type === 'nl2tex') {
+      prompt = `Convert the following natural-language description into a complete, standalone, compilable LaTeX document with a proper preamble and sensible placeholder content. Return ONLY the LaTeX source inside a single fenced code block:\n\n${promptInput}`;
     }
 
     try {
@@ -156,9 +160,9 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
               onChange={e => setSelectedProviderId(e.target.value)}
               className="bg-white border-2 border-slate-300 px-2 py-1 text-xs text-slate-800 flex-1 truncate font-sans font-semibold focus:border-[#D11111]"
             >
-              {providers.map(p => (
+              {sortedProviders.map(p => (
                 <option key={p.id} value={p.id}>
-                  {p.label} ({p.model})
+                  {p.label} ({p.model}){p.isVerified ? '' : ' — unverified'}
                 </option>
               ))}
             </select>
@@ -208,6 +212,14 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
           }`}
         >
           Abstract
+        </button>
+        <button
+          onClick={() => setActiveTab('nl2tex')}
+          className={`flex-1 py-2 text-center transition-colors ${
+            activeTab === 'nl2tex' ? 'bg-white text-[#D11111] border-b-2 border-[#D11111] font-black' : 'hover:bg-slate-200'
+          }`}
+        >
+          NL→TeX
         </button>
       </div>
 
@@ -293,6 +305,29 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
             >
               {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
               <span>Generate Abstract</span>
+            </button>
+          </div>
+        )}
+
+        {activeTab === 'nl2tex' && (
+          <div className="space-y-3">
+            <p className="text-slate-600 font-medium">
+              Describe a document in plain language (Phase 6) — get a complete compilable LaTeX draft.
+            </p>
+            <textarea
+              value={promptInput}
+              onChange={e => setPromptInput(e.target.value)}
+              placeholder="e.g. A two-column article about graph neural networks with an abstract, three sections, and a bibliography…"
+              rows={4}
+              className="w-full bg-slate-50 border-2 border-slate-300 p-2 text-slate-900 focus:outline-hidden focus:border-[#D11111] font-mono text-xs"
+            />
+            <button
+              onClick={() => handleGenerate('nl2tex')}
+              disabled={isGenerating || !promptInput.trim()}
+              className="w-full py-2.5 bg-[#D11111] text-white font-black uppercase tracking-widest hover:bg-black disabled:opacity-50 flex items-center justify-center space-x-1.5 transition-colors border border-red-700"
+            >
+              {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+              <span>Generate LaTeX Draft</span>
             </button>
           </div>
         )}

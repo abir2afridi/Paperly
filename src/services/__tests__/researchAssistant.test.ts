@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   buildFactCheckPrompt,
   buildLiteratureReviewPrompt,
+  combinePaperExcerpts,
   paperCiteKey,
   papersToBibtex,
   searchSemanticScholar,
@@ -125,6 +126,38 @@ describe('AI prompts (§42/§43)', () => {
     const prompt = buildFactCheckPrompt('Transformers use attention', 'Source says transformers use attention.');
     expect(prompt).toContain('Claim: Transformers use attention');
     expect(prompt).toContain('SUPPORTED / REFUTED / UNCERTAIN');
+  });
+});
+
+describe('combinePaperExcerpts (§42 multi-paper)', () => {
+  const paper = (name: string, text: string) => ({ name, excerpt: text, pageCount: 1, wordCount: 10 });
+
+  it('labels each paper and joins them in upload order', () => {
+    const combined = combinePaperExcerpts([paper('a.pdf', 'First body'), paper('b.pdf', 'Second body')]);
+    expect(combined).toContain('--- a.pdf ---');
+    expect(combined).toContain('First body');
+    expect(combined).toContain('--- b.pdf ---');
+    expect(combined).toContain('Second body');
+    expect(combined.indexOf('a.pdf')).toBeLessThan(combined.indexOf('b.pdf'));
+  });
+
+  it('caps each paper at 6000 chars and the total at 18000 chars', () => {
+    const big = 'x'.repeat(12000);
+    const combined = combinePaperExcerpts([paper('a.pdf', big), paper('b.pdf', big), paper('c.pdf', big)]);
+    const content = combined
+      .split(/\n--- .* ---\n/)
+      .map(s => s.replace(/^--- .* ---\n/, ''))
+      .join('');
+    expect(content.length).toBeLessThanOrEqual(18000);
+    const chunks = combined.split(/\n--- .* ---\n/).map(s => s.replace(/^--- .* ---\n/, ''));
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(6000);
+    }
+  });
+
+  it('skips papers with empty text', () => {
+    expect(combinePaperExcerpts([paper('a.pdf', ''), paper('b.pdf', 'Real')])).not.toContain('a.pdf');
+    expect(combinePaperExcerpts([])).toBe('');
   });
 });
 
