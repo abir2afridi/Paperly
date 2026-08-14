@@ -491,6 +491,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {/* Quick Action Button */}
             <div className="flex flex-wrap items-center gap-3">
               <button
+                data-tour="new-project"
                 onClick={onCreateNewProject}
                 className="px-5 py-3 bg-ink hover:opacity-90 text-canvas font-bold text-xs uppercase tracking-widest flex items-center space-x-2 transition-opacity"
               >

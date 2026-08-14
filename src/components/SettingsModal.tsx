@@ -22,6 +22,14 @@ import {
 import { AIProviderConfig } from '../types';
 import { THEMES, ThemeId, ThemeDefinition } from '../services/themeService';
 import { createProvider, deleteProvider, aiTestProvider } from '../services/aiEngine';
+import {
+  DeviceSession,
+  deviceLabelFromUserAgent,
+  listSessions,
+  revokeOtherSessions,
+  revokeSession,
+} from '../services/sessions';
+import { getChatRetentionDays, setChatRetentionDays } from '../services/db';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -449,16 +457,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
 
           {activeTab === 'sessions' && (
-            <div className="space-y-3">
-              <h4 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">Active Author Sessions</h4>
-              <div className="p-3 bg-slate-50 border-2 border-slate-200 flex items-center justify-between">
-                <div>
-                  <span className="font-bold text-slate-900">Current Session (Browser)</span>
-                  <p className="text-slate-500 font-mono text-[11px]">Last active: Just now • San Francisco, CA</p>
-                </div>
-                <span className="bg-emerald-100 text-emerald-800 font-bold text-[10px] px-2 py-0.5 border border-emerald-300 uppercase tracking-wider">Active</span>
-              </div>
-            </div>
+            <SessionsTab />
           )}
 
 {activeTab === 'editor' && (
@@ -513,6 +512,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {activeTab === 'privacy' && (
             <div className="space-y-3">
               <h4 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">Privacy & Data Portability</h4>
+              <RetentionSetting />
               <p className="text-slate-500 font-mono text-[11px] leading-relaxed">
                 Download a GDPR-style archive of everything we store for your account: profile, projects
                 and their files, comments, chat, activity, snapshots, PDF annotations, drafts and
@@ -552,6 +552,194 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
         </div>
       </div>
+    </div>
+  );
+};
+
+// ---- Sessions tab (§34) ----
+
+const RETENTION_OPTIONS: { label: string; days: number | null }[] = [
+  { label: 'Keep forever', days: null },
+  { label: '7 days', days: 7 },
+  { label: '30 days', days: 30 },
+  { label: '90 days', days: 90 },
+];
+
+const RetentionSetting: React.FC = () => {
+  const [days, setDays] = useState<number | null | undefined>(undefined);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    getChatRetentionDays().then(value => setDays(value));
+  }, []);
+
+  const apply = async (value: number | null) => {
+    setSaving(true);
+    setMessage(null);
+    const result = await setChatRetentionDays(value);
+    setSaving(false);
+    if (result.ok) {
+      setDays(value);
+      setMessage(value === null ? 'Retention disabled — chat is kept until the project is deleted.' : `Chat older than ${value} days will be swept automatically.`);
+    } else {
+      setMessage(result.error);
+    }
+  };
+
+  return (
+    <div className="p-3 bg-slate-50 border-2 border-slate-200">
+      <span className="block font-bold text-slate-900 text-sm">Chat history retention</span>
+      <p className="text-slate-500 font-mono text-[11px] mt-0.5 mb-2">
+        Automatically delete project chat messages older than the selected window.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {RETENTION_OPTIONS.map(opt => (
+          <button
+            key={opt.label}
+            onClick={() => apply(opt.days)}
+            disabled={saving || days === opt.days}
+            className={`px-3 py-1.5 border-2 font-bold uppercase tracking-wider text-[10px] transition-colors ${
+              days === opt.days
+                ? 'bg-[#D11111] text-white border-red-800'
+                : 'bg-white text-slate-700 border-slate-300 hover:border-slate-500'
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      {saving && <p className="mt-2 text-slate-500 font-mono text-[10px]">Saving…</p>}
+      {message && <p className="mt-2 text-slate-600 font-mono text-[10px]">{message}</p>}
+    </div>
+  );
+};
+
+const SessionsTab: React.FC = () => {
+  const [sessions, setSessions] = useState<DeviceSession[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [revoking, setRevoking] = useState<string | null>(null);
+  const [revokingAll, setRevokingAll] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setSessions(await listSessions());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load sessions.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleRevoke = async (id: string) => {
+    setRevoking(id);
+    try {
+      await revokeSession(id);
+      setSessions(prev => prev.filter(s => s.id !== id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to revoke session.');
+    } finally {
+      setRevoking(null);
+    }
+  };
+
+  const handleRevokeOthers = async () => {
+    setRevokingAll(true);
+    try {
+      const current = sessions.find(s => s.current);
+      await revokeOtherSessions(current?.id || '');
+      setSessions(prev => prev.filter(s => s.current));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to revoke other sessions.');
+    } finally {
+      setRevokingAll(false);
+    }
+  };
+
+  const formatDate = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    } catch {
+      return iso;
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">Active Author Sessions</h4>
+        <button
+          onClick={load}
+          className="flex items-center space-x-1 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 hover:text-slate-900 border border-slate-300 hover:border-slate-500"
+        >
+          <RefreshCw className="w-3 h-3" />
+          <span>Refresh</span>
+        </button>
+      </div>
+
+      {error && (
+        <div className="flex items-center space-x-2 p-2.5 bg-amber-50 border-2 border-amber-300 text-amber-800 font-bold text-[11px]">
+          <Shield className="w-3.5 h-3.5" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-8 text-slate-400">
+          <Loader2 className="w-5 h-5 animate-spin" />
+        </div>
+      ) : sessions.length === 0 ? (
+        <p className="text-slate-500 font-mono text-[11px] py-4">No sessions found for this account.</p>
+      ) : (
+        <div className="space-y-2">
+          {sessions.map(s => (
+            <div key={s.id} className="p-3 bg-slate-50 border-2 border-slate-200 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex items-center space-x-2">
+                  <span className="font-bold text-slate-900 truncate">{deviceLabelFromUserAgent(s.userAgent)}</span>
+                  {s.current && (
+                    <span className="bg-emerald-100 text-emerald-800 font-bold text-[10px] px-2 py-0.5 border border-emerald-300 uppercase tracking-wider shrink-0">
+                      Current
+                    </span>
+                  )}
+                </div>
+                <p className="text-slate-500 font-mono text-[11px] mt-0.5 truncate">
+                  {s.ip || 'IP unknown'} · Active {formatDate(s.updatedAt)}
+                </p>
+              </div>
+              {!s.current && (
+                <button
+                  onClick={() => handleRevoke(s.id)}
+                  disabled={revoking === s.id}
+                  className="flex items-center space-x-1 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-red-700 border border-red-300 hover:bg-red-50 disabled:opacity-50 shrink-0"
+                >
+                  {revoking === s.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <LogOut className="w-3 h-3" />}
+                  <span>Revoke</span>
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {sessions.length > 1 && (
+        <button
+          onClick={handleRevokeOthers}
+          disabled={revokingAll}
+          className="w-full flex items-center justify-center space-x-1.5 px-3 py-2 border-2 border-red-300 text-red-700 font-black uppercase tracking-wider text-[11px] hover:bg-red-50 disabled:opacity-50"
+        >
+          {revokingAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
+          <span>Sign out all other devices</span>
+        </button>
+      )}
     </div>
   );
 };

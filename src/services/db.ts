@@ -156,6 +156,32 @@ async function getProfile(uid: string): Promise<ProfileRow | null> {
   return (data as ProfileRow) || null;
 }
 
+// §40 — chat retention preference (days; null = keep forever)
+export async function setChatRetentionDays(days: number | null) {
+  if (!supabase) return { ok: false as const, error: 'Database is not configured.' };
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return { ok: false as const, error: 'Not signed in.' };
+  const { error } = await supabase
+    .from('profiles')
+    .update({ chat_retention_days: days })
+    .eq('id', userData.user.id);
+  if (error) return { ok: false as const, error: error.message };
+  return { ok: true as const };
+}
+
+export async function getChatRetentionDays(): Promise<number | null> {
+  if (!supabase) return null;
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return null;
+  const { data } = await supabase
+    .from('profiles')
+    .select('chat_retention_days')
+    .eq('id', userData.user.id)
+    .maybeSingle();
+  const row = data as { chat_retention_days?: number | null } | null;
+  return row?.chat_retention_days ?? null;
+}
+
 // =============================================================
 // Projects
 // =============================================================

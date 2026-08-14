@@ -22,6 +22,8 @@ export interface ProfileRow {
   email: string;
   display_name: string;
   academic_role: string;
+  email_notifications?: boolean;
+  chat_retention_days?: number | null;
   created_at: string;
 }
 

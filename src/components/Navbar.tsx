@@ -28,6 +28,7 @@ import {
   MessageSquareText,
   Mail,
   FileWarning,
+  HelpCircle,
 } from 'lucide-react';
 import { Project, CompilationResult, AppNotification } from '../types';
 
@@ -47,6 +48,7 @@ interface NavbarProps {
   onOpenTableEditor: () => void;
   onOpenHistory: () => void;
   onOpenShortcuts?: () => void;
+  onOpenTour?: () => void;
   onToggleAiPanel: () => void;
   isAiPanelOpen: boolean;
   onToggleChatPanel: () => void;
@@ -76,6 +78,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenTableEditor,
   onOpenHistory,
   onOpenShortcuts,
+  onOpenTour,
   onToggleAiPanel,
   isAiPanelOpen,
   onToggleChatPanel,
@@ -175,6 +178,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* Main Action Bar (Compile & Status) */}
       <div className="flex items-center space-x-2 relative z-10">
         <button
+          data-tour="compile"
           onClick={onCompile}
           disabled={isCompiling}
           className={`flex items-center space-x-1.5 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-white transition-all shadow-xs ${
@@ -327,6 +331,16 @@ export const Navbar: React.FC<NavbarProps> = ({
             title="Keyboard Shortcuts Cheatsheet (Cmd/Ctrl + /)"
           >
             <Keyboard className="w-4 h-4 text-slate-700" />
+          </button>
+        )}
+
+        {onOpenTour && (
+          <button
+            onClick={onOpenTour}
+            className="p-1.5 text-slate-600 hover:text-[#D11111] hover:bg-red-50 transition-colors border border-transparent hover:border-red-200"
+            title="Show onboarding tour"
+          >
+            <HelpCircle className="w-4 h-4 text-slate-700" />
           </button>
         )}
 

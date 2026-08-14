@@ -1,0 +1,16 @@
+{
+  "name": "Paperly — Collaborative LaTeX Editor",
+  "short_name": "Paperly",
+  "description": "Free, open, Overleaf-class collaborative LaTeX platform. Write, compile and publish academic papers in the browser.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#D11111",
+  "lang": "en",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

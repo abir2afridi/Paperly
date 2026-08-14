@@ -67,6 +67,7 @@ interface WorkspaceViewProps {
   onGoHome: () => void;
   onOpenSettings: () => void;
   onOpenThemeSelector: () => void;
+  onOpenTour?: () => void;
   isAboutOpen: boolean;
   onCloseAbout: () => void;
   activeTheme: ThemeDefinition;
@@ -119,6 +120,7 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
   onGoHome,
   onOpenSettings,
   onOpenThemeSelector,
+  onOpenTour,
   isAboutOpen,
   onCloseAbout,
   activeTheme,
@@ -433,6 +435,7 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
         onOpenTableEditor={() => setIsTableEditorOpen(true)}
         onOpenHistory={() => setIsHistoryOpen(true)}
         onOpenShortcuts={() => setIsShortcutsOpen(true)}
+        onOpenTour={onOpenTour}
         onToggleAiPanel={() => setIsAiPanelOpen(!isAiPanelOpen)}
         isAiPanelOpen={isAiPanelOpen}
         onToggleChatPanel={() => setIsChatPanelOpen(!isChatPanelOpen)}
@@ -604,7 +607,7 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
             </div>
           </div>
 
-          <div className="flex-1 relative overflow-hidden">
+          <div className="flex-1 relative overflow-hidden" data-tour="editor">
             {/* Both editors stay mounted; visibility toggles with CSS so the
                 Monaco instance is never re-created (avoids repeated loading
                 every time the user switches Code Source / Visual AST Mode). */}
@@ -648,14 +651,15 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
         </main>
 
         {/* Right PDF.js Interactive Preview Panel */}
-        <section className={`${isPdfPanelOpen ? 'flex' : 'hidden'} w-1/2 min-w-80 h-full relative shrink-0`}>
+        <section className={`${isPdfPanelOpen ? 'flex' : 'hidden'} w-1/2 min-w-80 h-full relative shrink-0`} data-tour="pdf">
           <PdfViewer
             pdfDataUrl={compilationResult?.pdfDataUrl || null}
             diagnostics={compilationResult?.diagnostics || []}
             annotations={annotations}
             onAddAnnotation={handleAddAnnotation}
-            onSyncTexJump={() => {
-              setEditorMode('code');
+            sourceText={activeFile?.type === 'TEX' ? activeFile.content : ''}
+            onSyncTexJump={lineNumber => {
+              handleJumpToLine(activeFilePath, lineNumber);
             }}
           />
         </section>

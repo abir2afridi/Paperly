@@ -10,6 +10,7 @@ import { setContentInitializor, setupWSConnection } from '@y/websocket-server/ut
 import { sanitizeProjectFilePath } from './src/services/zipSecurity';
 import { createRateLimiter, clientIp } from './src/services/rateLimit';
 import { renderEmailTemplate, sendEmailViaResend } from './src/services/emailTemplates';
+import { buildProviderAdapter } from './src/services/aiProviderAdapter';
 import 'dotenv/config';
 
 const app = express();
@@ -323,66 +324,22 @@ app.post('/api/ai/providers/:id/test', async (req, res) => {
     return res.status(500).json({ error: 'Failed to decrypt provider key.' });
   }
 
+  const adapter = buildProviderAdapter({
+    id: provider.id,
+    label: provider.label,
+    providerType: provider.providerType,
+    baseUrl: provider.baseUrl,
+    apiKey: decryptedKey,
+    model: provider.model,
+    extraHeadersJson: provider.extraHeadersJson,
+    temperature: provider.temperature,
+    maxTokens: provider.maxTokens,
+  });
+
   const startTime = Date.now();
 
   try {
-    let testResponseText = '';
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    if (provider.extraHeadersJson) {
-      try {
-        const extra = JSON.parse(provider.extraHeadersJson);
-        Object.assign(headers, extra);
-      } catch {
-        // Ignore JSON error
-      }
-    }
-
-    if (provider.providerType === 'anthropic') {
-      headers['x-api-key'] = decryptedKey;
-      headers['anthropic-version'] = '2023-06-01';
-
-      const response = await fetch(`${provider.baseUrl.replace(/\/$/, '')}/v1/messages`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model: provider.model,
-          max_tokens: 10,
-          messages: [{ role: 'user', content: 'Ping' }],
-        }),
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Anthropic API error (${response.status}): ${errText}`);
-      }
-      testResponseText = 'Anthropic response received.';
-    } else {
-      // OpenAI / OpenAI-compatible default
-      headers['Authorization'] = `Bearer ${decryptedKey}`;
-
-      const targetUrl = provider.baseUrl.includes('/chat/completions')
-        ? provider.baseUrl
-        : `${provider.baseUrl.replace(/\/$/, '')}/chat/completions`;
-
-      const response = await fetch(targetUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model: provider.model,
-          messages: [{ role: 'user', content: 'Ping test' }],
-          max_tokens: 5,
-        }),
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Provider API error (${response.status}): ${errText}`);
-      }
-      testResponseText = 'OpenAI-compatible response received.';
-    }
+    const testResponseText = await adapter.testConnection();
 
     const latencyMs = Date.now() - startTime;
     provider.isVerified = true;
@@ -411,40 +368,8 @@ app.post('/api/ai/providers/:id/test', async (req, res) => {
 });
 
 // Parse an OpenAI-compatible or Anthropic completion response, handling SSE streams
-function parseCompletionBody(rawBody: string, providerType: string): string {
-  const trimmed = rawBody.trim();
-  if (trimmed.startsWith('data:')) {
-    let fullText = '';
-    for (const line of trimmed.split('\n')) {
-      const l = line.trim();
-      if (!l.startsWith('data:')) continue;
-      const payload = l.slice(5).trim();
-      if (!payload || payload === '[DONE]') continue;
-      try {
-        const obj = JSON.parse(payload);
-        if (providerType === 'anthropic') {
-          if (obj.type === 'content_block_delta' && typeof obj.delta?.text === 'string') {
-            fullText += obj.delta.text;
-          }
-        } else {
-          const delta = obj.choices?.[0]?.delta?.content;
-          const content = obj.choices?.[0]?.message?.content;
-          if (typeof delta === 'string') fullText += delta;
-          else if (typeof content === 'string') fullText += content;
-        }
-      } catch {
-        // Skip malformed stream chunk
-      }
-    }
-    return fullText || 'No response generated.';
-  }
-
-  const data = JSON.parse(trimmed);
-  if (providerType === 'anthropic') {
-    return data.content?.[0]?.text || 'No response generated.';
-  }
-  return data.choices?.[0]?.message?.content || 'No response generated.';
-}
+// (kept for backward compatibility with older code paths; new code goes through
+// buildProviderAdapter in src/services/aiProviderAdapter.ts).
 
 // POST Generate AI completions for TeXForge actions
 app.post('/api/ai/generate', async (req, res) => {
@@ -471,6 +396,18 @@ app.post('/api/ai/generate', async (req, res) => {
     return res.status(500).json({ error: 'Failed to decrypt API key.' });
   }
 
+  const adapter = buildProviderAdapter({
+    id: provider.id,
+    label: provider.label,
+    providerType: provider.providerType,
+    baseUrl: provider.baseUrl,
+    apiKey: decryptedKey,
+    model: provider.model,
+    extraHeadersJson: provider.extraHeadersJson,
+    temperature: provider.temperature,
+    maxTokens: provider.maxTokens,
+  });
+
   try {
     const systemPrompt = `You are TeXForge AI, an expert LaTeX co-author and debugging assistant embedded in the TeXForge web editor.
 
@@ -486,59 +423,11 @@ Respond in a helpful, structured teaching style. Follow these rules every time:
 
 This is the context: write your answers in the language the user wrote in; if unsure, use English.`;
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    if (provider.providerType === 'anthropic') {
-      headers['x-api-key'] = decryptedKey;
-      headers['anthropic-version'] = '2023-06-01';
-
-      const response = await fetch(`${provider.baseUrl.replace(/\/$/, '')}/v1/messages`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model: provider.model,
-          max_tokens: provider.maxTokens || 1000,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: `${prompt}\n\nContext:\n${context || ''}` }],
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
-
-      const answer = parseCompletionBody(await response.text(), 'anthropic');
-      res.json({ result: answer, providerModel: provider.model });
-    } else {
-      headers['Authorization'] = `Bearer ${decryptedKey}`;
-
-      const targetUrl = provider.baseUrl.includes('/chat/completions')
-        ? provider.baseUrl
-        : `${provider.baseUrl.replace(/\/$/, '')}/chat/completions`;
-
-      const response = await fetch(targetUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model: provider.model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: `${prompt}\n\nContext:\n${context || ''}` },
-          ],
-          temperature: provider.temperature ?? 0.3,
-          max_tokens: provider.maxTokens || 1000,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
-
-      const answer = parseCompletionBody(await response.text(), provider.providerType);
-      res.json({ result: answer, providerModel: provider.model });
-    }
+    const answer = await adapter.chat({
+      system: systemPrompt,
+      prompt: `${prompt}\n\nContext:\n${context || ''}`,
+    });
+    res.json({ result: answer, providerModel: provider.model });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: `AI Provider Error: ${msg}` });
@@ -557,6 +446,197 @@ app.post('/api/compile', (_req, res) => {
     diagnostics: [{ severity: 'error', file: 'main.tex', line: 1, message: 'Server-side TeX compilation is not implemented; compile from the editor instead.' }],
   });
 });
+
+// ================= SESSION / DEVICE MANAGEMENT (§34) =================
+// Lists and revokes the caller's auth sessions via the GoTrue admin REST
+// API (service-role only). Honest 501 when SUPABASE_SERVICE_ROLE_KEY is not
+// configured, mirroring the /api/compile route's no-fabrication rule.
+
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function adminAuthHeaders(): Record<string, string> {
+  return {
+    apikey: SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+    'Content-Type': 'application/json',
+  };
+}
+
+function requireSessionToken(req: express.Request): string | null {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  return token || null;
+}
+
+// GET /api/sessions — list the caller's sessions (device, IP, timestamps).
+app.get('/api/sessions', async (req, res) => {
+  const token = requireSessionToken(req);
+  if (!token) return res.status(401).json({ error: 'Missing authorization token.' });
+
+  const sb = createClient(process.env.VITE_SUPABASE_URL || '', process.env.VITE_SUPABASE_ANON_KEY || '', {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: userData, error: userError } = await sb.auth.getUser();
+  if (userError || !userData.user) return res.status(401).json({ error: 'Invalid session token.' });
+
+  if (!SERVICE_ROLE_KEY) {
+    return res.status(501).json({ error: 'Session listing requires SUPABASE_SERVICE_ROLE_KEY on the server.' });
+  }
+
+  const claims = decodeJwtPayload(token);
+  const currentSessionId = typeof claims?.session_id === 'string' ? claims.session_id : null;
+
+  try {
+    const response = await fetch(
+      `${process.env.VITE_SUPABASE_URL}/auth/v1/admin/sessions?user_id=${encodeURIComponent(userData.user.id)}`,
+      { headers: adminAuthHeaders() },
+    );
+    if (!response.ok) {
+      return res.status(response.status).json({ error: 'Failed to list sessions from the auth server.' });
+    }
+    const body = (await response.json()) as { sessions?: { id: string; created_at: string; updated_at: string; ip?: string; user_agent?: string }[] };
+    const sessions = (body.sessions || []).map(s => ({
+      id: s.id,
+      createdAt: s.created_at,
+      updatedAt: s.updated_at,
+      ip: s.ip || '',
+      userAgent: s.user_agent || '',
+      current: s.id === currentSessionId,
+    }));
+    res.json({ sessions });
+  } catch (err) {
+    console.error('[sessions] Listing failed:', err);
+    res.status(502).json({ error: 'Session listing failed.' });
+  }
+});
+
+// DELETE /api/sessions/:id — revoke one of the caller's sessions.
+app.delete('/api/sessions/:id', async (req, res) => {
+  const token = requireSessionToken(req);
+  if (!token) return res.status(401).json({ error: 'Missing authorization token.' });
+
+  const sb = createClient(process.env.VITE_SUPABASE_URL || '', process.env.VITE_SUPABASE_ANON_KEY || '', {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: userData, error: userError } = await sb.auth.getUser();
+  if (userError || !userData.user) return res.status(401).json({ error: 'Invalid session token.' });
+
+  if (!SERVICE_ROLE_KEY) {
+    return res.status(501).json({ error: 'Session revocation requires SUPABASE_SERVICE_ROLE_KEY on the server.' });
+  }
+
+  const sessionId = req.params.id;
+  if (!sessionId) return res.status(400).json({ error: 'Session id is required.' });
+
+  try {
+    // Ownership check: fetch the session first; only the owner may revoke it.
+    const check = await fetch(`${process.env.VITE_SUPABASE_URL}/auth/v1/admin/sessions/${sessionId}`, {
+      headers: adminAuthHeaders(),
+    });
+    if (!check.ok) return res.status(404).json({ error: 'Session not found.' });
+    const session = (await check.json()) as { user_id?: string };
+    if (session.user_id !== userData.user.id) {
+      return res.status(403).json({ error: 'You can only revoke your own sessions.' });
+    }
+
+    const del = await fetch(`${process.env.VITE_SUPABASE_URL}/auth/v1/admin/sessions/${sessionId}`, {
+      method: 'DELETE',
+      headers: adminAuthHeaders(),
+    });
+    if (!del.ok) {
+      return res.status(del.status).json({ error: 'Failed to revoke session.' });
+    }
+    res.json({ success: true, id: sessionId });
+  } catch (err) {
+    console.error('[sessions] Revocation failed:', err);
+    res.status(502).json({ error: 'Session revocation failed.' });
+  }
+});
+
+// DELETE /api/sessions/others — revoke every session except the caller's own.
+app.delete('/api/sessions/others', async (req, res) => {
+  const token = requireSessionToken(req);
+  if (!token) return res.status(401).json({ error: 'Missing authorization token.' });
+
+  const sb = createClient(process.env.VITE_SUPABASE_URL || '', process.env.VITE_SUPABASE_ANON_KEY || '', {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: userData, error: userError } = await sb.auth.getUser();
+  if (userError || !userData.user) return res.status(401).json({ error: 'Invalid session token.' });
+
+  if (!SERVICE_ROLE_KEY) {
+    return res.status(501).json({ error: 'Session revocation requires SUPABASE_SERVICE_ROLE_KEY on the server.' });
+  }
+
+  const claims = decodeJwtPayload(token);
+  const currentSessionId = typeof claims?.session_id === 'string' ? claims.session_id : null;
+  const { exceptSessionId } = req.body as { exceptSessionId?: string };
+  const keepId = exceptSessionId || currentSessionId;
+
+  try {
+    const response = await fetch(
+      `${process.env.VITE_SUPABASE_URL}/auth/v1/admin/sessions?user_id=${encodeURIComponent(userData.user.id)}`,
+      { headers: adminAuthHeaders() },
+    );
+    if (!response.ok) {
+      return res.status(response.status).json({ error: 'Failed to list sessions from the auth server.' });
+    }
+    const body = (await response.json()) as { sessions?: { id: string }[] };
+    const toRevoke = (body.sessions || []).filter(s => s.id !== keepId);
+
+    for (const s of toRevoke) {
+      await fetch(`${process.env.VITE_SUPABASE_URL}/auth/v1/admin/sessions/${encodeURIComponent(s.id)}`, {
+        method: 'DELETE',
+        headers: adminAuthHeaders(),
+      });
+    }
+    res.json({ success: true, revoked: toRevoke.length });
+  } catch (err) {
+    console.error('[sessions] Bulk revocation failed:', err);
+    res.status(502).json({ error: 'Session revocation failed.' });
+  }
+});
+
+// ================= CHAT RETENTION SWEEP (§40) =================
+// Periodically deletes expired chat messages (per-user retention window or
+// explicit expires_at). Requires the service role key; skips quietly when
+// unset so the dev server never needs it.
+
+function startChatRetentionSweep(intervalMs = 15 * 60_000): void {
+  if (!SERVICE_ROLE_KEY) {
+    console.warn('[retention] SUPABASE_SERVICE_ROLE_KEY not set — chat retention sweep disabled.');
+    return;
+  }
+  const runSweep = async () => {
+    try {
+      const admin = createClient(process.env.VITE_SUPABASE_URL || '', SERVICE_ROLE_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const { data, error } = await admin.rpc('sweep_expired_chat');
+      if (error) throw error;
+      if (typeof data === 'number' && data > 0) {
+        console.log(`[retention] Swept ${data} expired chat message(s).`);
+      }
+    } catch (err) {
+      console.error('[retention] Sweep failed:', err);
+    }
+  };
+  runSweep();
+  setInterval(runSweep, intervalMs);
+}
 
 // ================= REAL-TIME COLLABORATION (Yjs over WebSocket) =================
 // Rooms follow the plan's naming scheme: `project:<projectId>:file:<encodedPath>`.
@@ -711,6 +791,7 @@ async function startServer() {
 
   const server = http.createServer(app);
   attachCollabUpgrade(server);
+  startChatRetentionSweep();
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`TeXForge Server listening on http://localhost:${PORT}`);

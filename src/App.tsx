@@ -52,6 +52,8 @@ import { downloadAccountArchive } from './services/accountExport';
 import { insertPackageContent } from './services/ctanPackages';
 import { supabase } from './services/supabase';
 import { DraftRestoreModal } from './components/DraftRestoreModal';
+import { OfflineBanner } from './components/OfflineBanner';
+import { OnboardingTour, hasSeenTour } from './components/OnboardingTour';
 import {
   CollabSession,
   CollabStatus,
@@ -77,6 +79,7 @@ import { WorkspaceView, WorkspaceMenuBridge } from './workspace/WorkspaceView';
 
 import { STARTER_TEMPLATES } from './data/templates';
 import { compileLatexProject } from './services/latexCompiler';
+import { getCompileBackend } from './services/compileBackends';
 import { parseBibtex } from './services/bibParser';
 import {
   CodeThemeId,
@@ -102,6 +105,15 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [authPageMode, setAuthPageMode] = useState<'login' | 'signup'>('login');
   const [isAboutOpen, setIsAboutOpen] = useState(false);
+  const [isTourOpen, setIsTourOpen] = useState(false);
+
+  // §33 onboarding tour: auto-start once per browser for first-time visitors
+  // when they reach the dashboard.
+  useEffect(() => {
+    if (currentView !== 'dashboard' || isTourOpen || hasSeenTour()) return;
+    const timer = setTimeout(() => setIsTourOpen(true), 900);
+    return () => clearTimeout(timer);
+  }, [currentView, isTourOpen]);
 
   // Restore Supabase session on app start + react to auth changes (e.g. other tabs / desktop menu)
   useEffect(() => {
@@ -760,7 +772,7 @@ export default function App() {
     setIsCompiling(true);
     if (autoCompileTimerRef.current) clearTimeout(autoCompileTimerRef.current);
     try {
-      const result = await compileLatexProject({
+      const result = await getCompileBackend().compile({
         mainFilePath: project.mainFile,
         files: project.files,
         compiler: project.compiler,
@@ -1423,6 +1435,7 @@ export default function App() {
 
   return (
     <>
+      <OfflineBanner />
       {currentView === 'landing' && (
         <LandingPage
           currentUser={currentUser}
@@ -1479,6 +1492,7 @@ export default function App() {
           onGoHome={() => setCurrentView(currentUser ? 'dashboard' : 'landing')}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onOpenThemeSelector={() => setIsThemeSelectorOpen(true)}
+          onOpenTour={() => setIsTourOpen(true)}
           isAboutOpen={isAboutOpen}
           onCloseAbout={() => setIsAboutOpen(false)}
           activeTheme={activeTheme}
@@ -1576,6 +1590,9 @@ export default function App() {
         activeCodeThemeId={activeCodeThemeId}
         onSelectCodeTheme={handleSelectCodeTheme}
       />
+
+      {/* Onboarding tour (§33) */}
+      <OnboardingTour isOpen={isTourOpen} onClose={() => setIsTourOpen(false)} />
     </>
   );
 }

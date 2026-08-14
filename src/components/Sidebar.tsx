@@ -743,7 +743,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       >
         {/* MODULE 1: FILE EXPLORER */}
         {activeTab === 'files' && (
-          <div className="flex flex-col h-full">
+          <div className="flex flex-col h-full" data-tour="file-tree">
             <div className="p-3 border-b-2 border-slate-200 flex items-center justify-between bg-white">
               <span className="font-black uppercase tracking-widest text-[#D11111] text-[10px] flex items-center space-x-1.5">
                 <FileText className="w-3.5 h-3.5" />
