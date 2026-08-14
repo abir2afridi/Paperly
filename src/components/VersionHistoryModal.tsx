@@ -86,6 +86,11 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({
                 <span className="text-[10px] font-mono text-slate-400 font-normal block mt-1">
                   {new Date(snap.createdAt).toLocaleString()}
                 </span>
+                {snap.source === 'ai' && (
+                  <span className="inline-block mt-1 text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-700 border border-purple-300 px-1.5 py-0.5">
+                    AI edit (§51)
+                  </span>
+                )}
               </button>
             ))}
           </div>

@@ -1,7 +1,9 @@
 import { ProjectFile } from '../types';
+import { findNgramOverlaps } from './originalityCheck';
+import { RegisteredSourcePaper } from './researchSources';
 
 export type PublicationSeverity = 'error' | 'warning' | 'info';
-export type PublicationCategory = 'structure' | 'citations' | 'metadata' | 'completeness';
+export type PublicationCategory = 'structure' | 'citations' | 'metadata' | 'completeness' | 'originality';
 
 export interface PublicationFinding {
   severity: PublicationSeverity;
@@ -15,7 +17,11 @@ export interface PublicationFinding {
  * analysis of the common blockers editors run into before submission.
  * Every check is computed from the project files — nothing is guessed.
  */
-export function runPublicationCheck(mainFilePath: string, files: ProjectFile[]): PublicationFinding[] {
+export function runPublicationCheck(
+  mainFilePath: string,
+  files: ProjectFile[],
+  sourcePapers: RegisteredSourcePaper[] = []
+): PublicationFinding[] {
   const findings: PublicationFinding[] = [];
   const texFiles = files.filter(f => f.path.endsWith('.tex'));
   const mainFile = texFiles.find(f => f.path === mainFilePath) || texFiles.find(f => f.path.endsWith('.tex'));
@@ -144,6 +150,38 @@ export function runPublicationCheck(mainFilePath: string, files: ProjectFile[]):
       category: 'citations',
       message: `Duplicate \\label keys: ${duplicateLabels.join(', ')}.`,
       suggestion: 'Rename duplicates — this breaks cross-references at compile time.',
+    });
+  }
+
+  // ---- originality heuristic (§44, reuses §42's n-gram overlap check) ----
+  // Only meaningful when source papers were uploaded through the Research
+  // Assistant — that is the only place Paperly has the source text to compare
+  // against. Deterministic; no AI call needed.
+  if (sourcePapers.length > 0) {
+    const docText = allTex.replace(/%.*$/gm, ' ').replace(/\\(?:begin|end)\{[^}]*\}/g, ' ');
+    const report = findNgramOverlaps(docText, sourcePapers);
+    if (report.overlaps.length > 0) {
+      const worst = report.overlaps[0];
+      findings.push({
+        severity: 'warning',
+        category: 'originality',
+        message: `${report.overlaps.length} passage${report.overlaps.length === 1 ? '' : 's'} of the document closely match${report.overlaps.length === 1 ? 'es' : ''} an uploaded source paper (8+ consecutive identical words, e.g. "${worst.generatedPassage.slice(0, 90)}…" matches ${worst.sourceName}).`,
+        suggestion: 'Rephrase the flagged passages — this is a heuristic aid, not a legal originality guarantee. Always do a final human read-through.',
+      });
+    } else {
+      findings.push({
+        severity: 'info',
+        category: 'originality',
+        message: 'No n-gram overlaps found between the document and your uploaded source papers.',
+        suggestion: 'Heuristic passed — always do a final human read-through before submitting.',
+      });
+    }
+  } else {
+    findings.push({
+      severity: 'info',
+      category: 'originality',
+      message: 'Originality heuristic skipped — no source papers uploaded through the Research Assistant.',
+      suggestion: 'Upload the papers you drew from in AI Research Assistant to run the n-gram overlap check.',
     });
   }
 

@@ -77,4 +77,37 @@ describe('runPublicationCheck', () => {
     const findings = runPublicationCheck('main.tex', files);
     expect(findings.filter(f => f.severity === 'error')).toHaveLength(0);
   });
+
+  it('skips the originality heuristic with a note when no source papers exist', () => {
+    const findings = runPublicationCheck('main.tex', [tex('\\documentclass{article}\\begin{document}Text.\\end{document}')]);
+    const originality = findings.filter(f => f.category === 'originality');
+    expect(originality).toHaveLength(1);
+    expect(originality[0].severity).toBe('info');
+    expect(originality[0].message).toContain('skipped');
+  });
+
+  it('flags document passages that match an uploaded source paper (§44)', () => {
+    const verbatim =
+      'the transformer architecture relies entirely on self attention to compute representations of its input and output';
+    const findings = runPublicationCheck('main.tex', [tex(`\\documentclass{article}\\begin{document}${verbatim}\\end{document}`)], [
+      { name: 'paper.pdf', text: verbatim },
+    ]);
+    const originality = findings.filter(f => f.category === 'originality');
+    expect(originality).toHaveLength(1);
+    expect(originality[0].severity).toBe('warning');
+    expect(originality[0].message).toContain('closely match');
+    expect(originality[0].message).toContain('paper.pdf');
+  });
+
+  it('confirms no overlaps when the document is original (§44)', () => {
+    const findings = runPublicationCheck(
+      'main.tex',
+      [tex('\\documentclass{article}\\begin{document}Our contribution is a new hybrid sparse tensor approach.\\end{document}')],
+      [{ name: 'paper.pdf', text: 'gradient boosting ensembles decision trees sequentially to correct residuals' }]
+    );
+    const originality = findings.filter(f => f.category === 'originality');
+    expect(originality).toHaveLength(1);
+    expect(originality[0].severity).toBe('info');
+    expect(originality[0].message).toContain('No n-gram overlaps');
+  });
 });

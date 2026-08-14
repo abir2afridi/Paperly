@@ -11,6 +11,7 @@ import {
   FilePlus2,
   CheckCircle2,
   ExternalLink,
+  AlertTriangle,
 } from 'lucide-react';
 import { AIProviderConfig } from '../types';
 import { aiGenerate } from '../services/aiEngine';
@@ -24,6 +25,8 @@ import {
   buildLiteratureReviewPrompt,
   buildFactCheckPrompt,
 } from '../services/researchAssistant';
+import { findNgramOverlaps, OriginalityReport } from '../services/originalityCheck';
+import { registerSourcePaper, unregisterSourcePaper } from '../services/researchSources';
 
 interface ResearchAssistantModalProps {
   isOpen: boolean;
@@ -59,6 +62,7 @@ export const ResearchAssistantModal: React.FC<ResearchAssistantModalProps> = ({
   const [generationError, setGenerationError] = useState('');
   const [generated, setGenerated] = useState('');
   const [lastAction, setLastAction] = useState('');
+  const [originalityReport, setOriginalityReport] = useState<OriginalityReport | null>(null);
 
   const [factCheckInput, setFactCheckInput] = useState('');
   const [notice, setNotice] = useState('');
@@ -97,6 +101,7 @@ export const ResearchAssistantModal: React.FC<ResearchAssistantModalProps> = ({
         });
       }
       setPdfs(prev => [...prev, ...added]);
+      added.forEach(p => registerSourcePaper({ name: p.name, text: p.excerpt }));
       if (added.length > 0 && !query) {
         const firstLine = added[0].excerpt.split(/\n/).find(l => l.trim().length > 15);
         if (firstLine) setQuery(firstLine.trim().slice(0, 80));
@@ -110,6 +115,8 @@ export const ResearchAssistantModal: React.FC<ResearchAssistantModalProps> = ({
 
   const removePaper = (name: string) => {
     setPdfs(prev => prev.filter(p => p.name !== name));
+    setOriginalityReport(null);
+    unregisterSourcePaper(name);
   };
 
   const handleSearch = async () => {
@@ -164,6 +171,8 @@ export const ResearchAssistantModal: React.FC<ResearchAssistantModalProps> = ({
       setGenerated(result.result);
       setLastAction('review');
       setNotice('');
+      // §42 originality safeguard: flag 8+ word n-gram overlaps with the sources.
+      setOriginalityReport(findNgramOverlaps(result.result, pdfs.map(p => ({ name: p.name, text: p.excerpt }))));
     } catch (err) {
       setGenerationError(err instanceof Error ? err.message : 'Generation failed.');
     } finally {
@@ -185,6 +194,7 @@ export const ResearchAssistantModal: React.FC<ResearchAssistantModalProps> = ({
       const result = await aiGenerate(providerId, prompt, combinedExcerpt);
       setGenerated(result.result);
       setLastAction('factcheck');
+      setOriginalityReport(null);
       setNotice('');
     } catch (err) {
       setGenerationError(err instanceof Error ? err.message : 'Fact-check failed.');
@@ -418,6 +428,36 @@ export const ResearchAssistantModal: React.FC<ResearchAssistantModalProps> = ({
                 <pre className="text-[11px] font-mono text-slate-200 whitespace-pre-wrap max-h-64 overflow-y-auto bg-slate-950 p-2">
                   {generated}
                 </pre>
+              </div>
+            )}
+
+            {originalityReport && lastAction === 'review' && originalityReport.overlaps.length > 0 && (
+              <div className="border-2 border-amber-700 bg-amber-950/40 p-3 space-y-2">
+                <div className="flex items-center space-x-2 text-amber-300">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span className="text-[11px] font-mono uppercase tracking-wider font-bold">
+                    Originality safeguard — {originalityReport.overlaps.length} passage
+                    {originalityReport.overlaps.length === 1 ? '' : 's'} closely match a source
+                  </span>
+                </div>
+                <p className="text-amber-200/80 text-[11px]">
+                  The passages below match your uploaded source PDFs word-for-word (8+ consecutive
+                  words). Consider rephrasing them. This is a heuristic aid, not a legal originality
+                  guarantee.
+                </p>
+                <div className="space-y-2">
+                  {originalityReport.overlaps.map((o, i) => (
+                    <div key={i} className="bg-slate-950 border border-amber-900 p-2 space-y-1.5">
+                      <p className="text-[11px] text-amber-300 font-mono">
+                        <span className="font-bold">Generated:</span> "{o.generatedPassage}"
+                      </p>
+                      <p className="text-[11px] text-slate-400 font-mono">
+                        <span className="font-bold text-slate-300">Matches</span> {o.sourceName}
+                        {o.wordCount > 0 ? ` (${o.wordCount} words): ` : ': '}"{o.sourcePassage}"
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </section>

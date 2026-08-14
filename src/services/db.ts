@@ -750,14 +750,20 @@ export async function fetchSnapshots(projectId: string): Promise<ProjectSnapshot
     title: r.title,
     files: r.files || [],
     createdAt: r.created_at,
+    source: (r.source as ProjectSnapshot['source']) || 'human',
   }));
 }
 
-export async function createSnapshotInDb(projectId: string, title: string, files: { path: string; content: string }[]): Promise<ProjectSnapshot | null> {
+export async function createSnapshotInDb(
+  projectId: string,
+  title: string,
+  files: { path: string; content: string }[],
+  source: ProjectSnapshot['source'] = 'human'
+): Promise<ProjectSnapshot | null> {
   if (!supabase) return null;
   const { data, error } = await supabase
     .from('project_snapshots')
-    .insert({ project_id: projectId, title, files })
+    .insert({ project_id: projectId, title, files, source })
     .select()
     .single();
   if (error) {
@@ -765,7 +771,14 @@ export async function createSnapshotInDb(projectId: string, title: string, files
     return null;
   }
   const r = data as SnapshotRow;
-  return { id: r.id, projectId: r.project_id, title: r.title, files: r.files || [], createdAt: r.created_at };
+  return {
+    id: r.id,
+    projectId: r.project_id,
+    title: r.title,
+    files: r.files || [],
+    createdAt: r.created_at,
+    source: (r.source as ProjectSnapshot['source']) || 'human',
+  };
 }
 
 // =============================================================

@@ -1337,10 +1337,10 @@ export default function App() {
   };
 
   // Create a version snapshot (cloud-backed when signed in)
-  const handleCreateSnapshot = (title: string) => {
+  const handleCreateSnapshot = (title: string, source: ProjectSnapshot['source'] = 'human') => {
     const snapshotFiles = project.files.map(f => ({ path: f.path, content: f.content || '' }));
     if (currentUser?.id) {
-      createSnapshotInDb(project.id, title, snapshotFiles).then(created => {
+      createSnapshotInDb(project.id, title, snapshotFiles, source).then(created => {
         if (created) setSnapshots(prev => [created, ...prev]);
       });
       return;
@@ -1352,6 +1352,7 @@ export default function App() {
         title,
         createdAt: new Date().toISOString(),
         files: snapshotFiles,
+        source,
       },
       ...prev,
     ]);
@@ -1499,6 +1500,28 @@ export default function App() {
           onRenameFile={handleRenameFile}
           onDeleteFile={handleDeleteFile}
           onUpdateFileContent={handleFileContentChange}
+          onApplyFileFix={(path, content) => {
+            if (path === activeFilePath) {
+              handleFileContentChange(content);
+              return;
+            }
+            setProject(prev => ({
+              ...prev,
+              updatedAt: new Date().toISOString(),
+              files: prev.files.map(f => (f.path === path ? { ...f, content, sizeBytes: content.length } : f)),
+            }));
+            if (!autosaveEnabled) {
+              dirtyDraftsRef.current.set(path, content);
+              setSaveStatus('draft');
+              if (draftFlushTimerRef.current) clearTimeout(draftFlushTimerRef.current);
+              draftFlushTimerRef.current = setTimeout(() => {
+                flushDirtyDrafts();
+              }, 400);
+            } else {
+              setSaveStatus('saving');
+            }
+          }}
+          onAiSnapshot={title => handleCreateSnapshot(title, 'ai')}
           collab={collabSession}
           collabUsers={collabUsers}
           collabStatus={collabStatus}

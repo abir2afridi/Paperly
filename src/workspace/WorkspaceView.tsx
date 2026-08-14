@@ -11,8 +11,10 @@ import { Code, Eye, PanelRight, PanelRightClose, BadgeCheck, PackageSearch } fro
 import { Navbar } from '../components/Navbar';
 import { Sidebar } from '../components/Sidebar';
 import { PublicationCheckModal } from '../components/PublicationCheckModal';
+import { FixWithAiModal } from '../components/FixWithAiModal';
 import { CtanPackageModal } from '../components/CtanPackageModal';
 import { runPublicationCheck } from '../services/publicationCheck';
+import { getRegisteredSourcePapers } from '../services/researchSources';
 import { MonacoEditor, MonacoEditorApi } from '../components/MonacoEditor';
 import { TerminalPanel } from '../components/TerminalPanel';
 import { VisualRichTextEditor } from '../components/VisualRichTextEditor';
@@ -38,6 +40,7 @@ import {
   ProjectFile,
   CodeComment,
   CompilationResult,
+  CompileDiagnostic,
   AIProviderConfig,
   PdfAnnotation,
   ChatMessage,
@@ -83,6 +86,10 @@ interface WorkspaceViewProps {
   onRenameFile: (oldPath: string, newPath: string) => void;
   onDeleteFile: (path: string) => void;
   onUpdateFileContent: (content: string) => void;
+  /** §49: apply AI-fixed content to a specific file (may differ from active). */
+  onApplyFileFix: (path: string, content: string) => void;
+  /** §51: record an `ai`-source snapshot before an AI edit batch. */
+  onAiSnapshot: (title: string) => void;
   onInsertLatex: (snippet: string) => void;
   onInsertPackage: (name: string) => void;
   onAppendBibtex: (bibtex: string, citeKey: string) => void;
@@ -136,6 +143,8 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
   onRenameFile,
   onDeleteFile,
   onUpdateFileContent,
+  onApplyFileFix,
+  onAiSnapshot,
   onInsertLatex,
   onInsertPackage,
   onAppendBibtex,
@@ -169,11 +178,15 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
   const [isTerminalMaximized, setIsTerminalMaximized] = useState(false);
   const editorApiRef = useRef<MonacoEditorApi | null>(null);
 
+  // Bumped when the research assistant closes so the §44 originality heuristic
+  // re-runs against freshly registered source papers.
+  const [researchCloseTick, setResearchCloseTick] = useState(0);
+
   // Publication Readiness Check (plan §44)
   const [isPubCheckOpen, setIsPubCheckOpen] = useState(false);
   const pubCheckFindings = useMemo(
-    () => runPublicationCheck(project.mainFile, project.files),
-    [project.mainFile, project.files]
+    () => runPublicationCheck(project.mainFile, project.files, getRegisteredSourcePapers()),
+    [project.mainFile, project.files, researchCloseTick]
   );
 
   // Auto-expand the terminal panel when a compile produces errors
@@ -251,6 +264,18 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isResearchOpen, setIsResearchOpen] = useState(false);
+
+  // §49: Fix-with-AI per diagnostic row — the diagnostic being fixed.
+  const [fixDiagnostic, setFixDiagnostic] = useState<CompileDiagnostic | null>(null);
+  // §49.5: hand-off nonce into the AI chat panel.
+  const [chatHandoff, setChatHandoff] = useState<{ prompt: string; nonce: number } | null>(null);
+
+  // The file content the active fix diagnostic refers to (may differ from the
+  // active file — diagnostics carry their own file path).
+  const fixFileContent =
+    fixDiagnostic?.file && fixDiagnostic.file !== activeFilePath
+      ? project.files.find(f => f.path === fixDiagnostic.file)?.content ?? ''
+      : project.files.find(f => f.path === activeFilePath)?.content ?? '';
 
   // Responsive layout: collapsed sidebar + PDF panel visibility
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
@@ -661,6 +686,7 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
             annotations={annotations}
             onAddAnnotation={handleAddAnnotation}
             sourceText={activeFile?.type === 'TEX' ? activeFile.content : ''}
+            backendUsed={compilationResult?.backendUsed}
             onSyncTexJump={lineNumber => {
               handleJumpToLine(activeFilePath, lineNumber);
             }}
@@ -684,6 +710,10 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
             setIsAiPanelOpen(false);
             onOpenSettings();
           }}
+          chatHandoff={chatHandoff}
+          projectFiles={project.files}
+          onApplyProjectFile={(path, content) => onApplyFileFix(path, content)}
+          onAiSnapshot={onAiSnapshot}
         />
 
         {/* Slide-out Chat & Activity Drawer */}
@@ -708,6 +738,29 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
         onToggleMaximize={() => setIsTerminalMaximized(prev => !prev)}
         activeFilePath={activeFilePath}
         onJumpToLine={handleJumpToLine}
+        onFixWithAi={setFixDiagnostic}
+        fixDisabled={providers.length === 0}
+      />
+
+      {/* §49: Fix-with-AI modal — context gathered automatically */}
+      <FixWithAiModal
+        isOpen={fixDiagnostic !== null}
+        onClose={() => setFixDiagnostic(null)}
+        diagnostic={fixDiagnostic}
+        fileContent={fixFileContent}
+        rawLog={compilationResult?.log || ''}
+        backendUsed={compilationResult?.backendUsed}
+        providers={providers}
+        onOpenSettings={onOpenSettings}
+        onApplyFix={content => {
+          const target = fixDiagnostic?.file && fixDiagnostic.file !== activeFilePath ? fixDiagnostic.file : activeFilePath;
+          onApplyFileFix(target, content);
+        }}
+        onRecompile={onCompile}
+        onHandoffToChat={prompt => {
+          setChatHandoff({ prompt, nonce: Date.now() });
+          setIsAiPanelOpen(true);
+        }}
       />
 
       {/* Modals & Dialog Windows */}
@@ -755,7 +808,10 @@ export const WorkspaceView: React.FC<WorkspaceViewProps> = ({
 
       <ResearchAssistantModal
         isOpen={isResearchOpen}
-        onClose={() => setIsResearchOpen(false)}
+        onClose={() => {
+          setIsResearchOpen(false);
+          setResearchCloseTick(t => t + 1);
+        }}
         providers={providers}
         onInsertLatex={onInsertLatex}
       />

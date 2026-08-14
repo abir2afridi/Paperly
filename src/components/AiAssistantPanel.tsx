@@ -14,8 +14,9 @@ import {
   ArrowRight,
   Send,
 } from 'lucide-react';
-import { CompileDiagnostic, AIProviderConfig } from '../types';
+import { CompileDiagnostic, AIProviderConfig, ProjectFile } from '../types';
 import { aiGenerate } from '../services/aiEngine';
+import { AgentChatTab } from './AgentChatTab';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -31,6 +32,14 @@ interface AiAssistantPanelProps {
   providers: AIProviderConfig[];
   onOpenSettings: () => void;
   onTaskComplete?: (summary: string) => void;
+  /** §49.5: hand-off context from Fix-with-AI; seeds the chat input. */
+  chatHandoff?: { prompt: string; nonce: number } | null;
+  /** §50: agentic chat needs the whole (RLS-scoped) project file set. */
+  projectFiles?: ProjectFile[];
+  /** §50/§51: apply a proposed file edit; also used for AI revert. */
+  onApplyProjectFile?: (path: string, content: string) => void;
+  /** §51: record an `ai`-source snapshot before an AI edit batch. */
+  onAiSnapshot?: (title: string) => void;
 }
 
 export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
@@ -42,9 +51,13 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
   providers,
   onOpenSettings,
   onTaskComplete,
+  chatHandoff = null,
+  projectFiles = [],
+  onApplyProjectFile,
+  onAiSnapshot,
 }) => {
   const [selectedProviderId, setSelectedProviderId] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'explain' | 'fix' | 'rewrite' | 'abstract' | 'nl2tex'>('explain');
+  const [activeTab, setActiveTab] = useState<'explain' | 'fix' | 'rewrite' | 'abstract' | 'nl2tex' | 'agent'>('explain');
   const [promptInput, setPromptInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiResult, setAiResult] = useState<string | null>(null);
@@ -53,10 +66,20 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
   const [chatInput, setChatInput] = useState('');
   const [isChatSending, setIsChatSending] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const lastHandoffNonce = useRef(0);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, isChatSending]);
+
+  // §49.5: consume a chat hand-off (Fix-with-AI → conversational follow-up).
+  useEffect(() => {
+    if (chatHandoff && chatHandoff.nonce !== lastHandoffNonce.current) {
+      lastHandoffNonce.current = chatHandoff.nonce;
+      setChatInput(chatHandoff.prompt);
+      setActiveTab('explain');
+    }
+  }, [chatHandoff]);
 
   if (!isOpen) return null;
 
@@ -221,6 +244,14 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
         >
           NL→TeX
         </button>
+        <button
+          onClick={() => setActiveTab('agent')}
+          className={`flex-1 py-2 text-center transition-colors ${
+            activeTab === 'agent' ? 'bg-white text-[#D11111] border-b-2 border-[#D11111] font-black' : 'hover:bg-slate-200'
+          }`}
+        >
+          Agent
+        </button>
       </div>
 
       {/* Main Content Area */}
@@ -330,6 +361,18 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
               <span>Generate LaTeX Draft</span>
             </button>
           </div>
+        )}
+
+        {activeTab === 'agent' && (
+          <AgentChatTab
+            providers={providers}
+            activeProvider={activeProvider}
+            activeFileContent={activeFileContent}
+            projectFiles={projectFiles}
+            onApplyProjectFile={(path, content) => onApplyProjectFile?.(path, content)}
+            onAiSnapshot={onAiSnapshot}
+            onError={msg => setErrorMsg(msg)}
+          />
         )}
 
         {/* Error Notification */}

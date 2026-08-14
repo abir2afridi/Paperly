@@ -24,7 +24,10 @@ export class ParserCompileBackend implements CompileBackend {
   readonly capabilities = ['pdf', 'lint', 'resource-validation', 'latex-to-pdf'];
 
   async compile(options: CompileOptions): Promise<CompilationResult> {
-    return compileLatexProject(options);
+    const result = await compileLatexProject(options);
+    // §48: every result records which backend produced it so the PDF viewer
+    // can show the persistent "Preview — browser compiler" badge.
+    return { ...result, backendUsed: this.id };
   }
 }
 

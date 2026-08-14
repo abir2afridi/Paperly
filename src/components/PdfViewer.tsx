@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   FileText,
   XCircle,
+  X,
 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { PdfAnnotation, CompileDiagnostic } from '../types';
@@ -31,6 +32,8 @@ interface PdfViewerProps {
   annotations: PdfAnnotation[];
   onAddAnnotation: (annotation: Omit<PdfAnnotation, 'id' | 'createdAt'>) => void;
   sourceText?: string;
+  /** §48: which compile backend produced the PDF ('parser' today). */
+  backendUsed?: string;
 }
 
 interface RenderedPage {
@@ -48,6 +51,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   annotations,
   onAddAnnotation,
   sourceText = '',
+  backendUsed,
 }) => {
   const [scale, setScale] = useState<number>(1.1);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
@@ -203,10 +207,38 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const handleZoomIn = () => setScale(prev => Math.min(prev + 0.2, 2.5));
   const handleZoomOut = () => setScale(prev => Math.max(prev - 0.2, 0.6));
 
+  // §48: one-time dismissible notice the first time a PDF preview is opened —
+  // honest about the browser compiler's reduced package/font fidelity.
+  const [showBackendNotice, setShowBackendNotice] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('texforge.pdfBackendNoticeDismissed') !== '1';
+    } catch {
+      return true;
+    }
+  });
+  const dismissBackendNotice = () => {
+    setShowBackendNotice(false);
+    try {
+      localStorage.setItem('texforge.pdfBackendNoticeDismissed', '1');
+    } catch {
+      /* ignore */
+    }
+  };
+
   return (
     <div className="w-full h-full flex flex-col bg-slate-100 select-none border-l-2 border-slate-200">
       {/* PDF Controls Header */}
       <div className="h-10 bg-white border-b-2 border-slate-200 flex items-center justify-between px-3 text-xs text-slate-800 font-bold">
+        {/* §48: persistent compile-backend badge — always visible, honest */}
+        <div className="flex items-center space-x-2 min-w-0">
+          <span
+            className="shrink-0 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 bg-amber-100 text-amber-800 border border-amber-300"
+            title="This preview is produced by the in-browser parser typesetter with a reduced package/font set — output may differ slightly from a full TeX Live compile."
+          >
+            Preview — browser compiler{backendUsed ? ` (${backendUsed})` : ''}
+          </span>
+        </div>
+
         {/* Page Nav */}
         <div className="flex items-center space-x-1">
           <button
@@ -309,6 +341,23 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
       {/* Main PDF Rendering Area */}
       <div ref={scrollRef} className="flex-1 overflow-auto p-4 flex justify-center items-start relative bg-slate-200/80">
+        {pdfDataUrl && showBackendNotice && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-start space-x-2 bg-white border-2 border-amber-400 shadow-xl px-4 py-2.5 max-w-md">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-[11px] text-slate-700 leading-snug">
+              This preview uses a browser-based compiler with a reduced package/font set. Output may
+              differ slightly from a full TeX Live compile — for final, submission-ready output, use
+              the full compiler once your instance has one configured.
+            </p>
+            <button
+              onClick={dismissBackendNotice}
+              className="shrink-0 text-slate-400 hover:text-[#D11111]"
+              title="Dismiss (one-time)"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
         {pdfDataUrl ? (
           loadError ? (
             <div className="flex flex-col items-center justify-center h-full text-center p-8 text-slate-500 max-w-lg mx-auto">

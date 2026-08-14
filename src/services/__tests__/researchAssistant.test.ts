@@ -144,14 +144,12 @@ describe('combinePaperExcerpts (§42 multi-paper)', () => {
   it('caps each paper at 6000 chars and the total at 18000 chars', () => {
     const big = 'x'.repeat(12000);
     const combined = combinePaperExcerpts([paper('a.pdf', big), paper('b.pdf', big), paper('c.pdf', big)]);
-    const content = combined
-      .split(/\n--- .* ---\n/)
-      .map(s => s.replace(/^--- .* ---\n/, ''))
-      .join('');
-    expect(content.length).toBeLessThanOrEqual(18000);
-    const chunks = combined.split(/\n--- .* ---\n/).map(s => s.replace(/^--- .* ---\n/, ''));
+    const payload = combined.replace(/--- .* ---\n/g, '').replace(/\n+/g, '');
+    expect(payload.length).toBeLessThanOrEqual(18000);
+    const chunks = combined.split(/\n--- .* ---\n/);
     for (const chunk of chunks) {
-      expect(chunk.length).toBeLessThanOrEqual(6000);
+      const excerpt = chunk.replace(/^--- .* ---\n/, '').trim();
+      expect(excerpt.length).toBeLessThanOrEqual(6000);
     }
   });
 

@@ -14,6 +14,7 @@ import {
   Layers,
   Maximize2,
   Minimize2,
+  Wand2,
 } from 'lucide-react';
 import { CompilationResult, CompileDiagnostic } from '../types';
 import { summarizeCompilation } from '../services/terminalEngine';
@@ -28,6 +29,10 @@ interface TerminalPanelProps {
   onToggleMaximize?: () => void;
   activeFilePath: string;
   onJumpToLine: (file: string, line: number) => void;
+  /** §49: "Fix with AI" per diagnostic row (no-op / undefined = hidden). */
+  onFixWithAi?: (diagnostic: CompileDiagnostic) => void;
+  /** Disable the fix action when no configured provider exists (§49 gating). */
+  fixDisabled?: boolean;
 }
 
 const SeverityIcon: React.FC<{ severity: CompileDiagnostic['severity'] }> = ({ severity }) => {
@@ -50,6 +55,8 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
   onToggleMaximize,
   activeFilePath,
   onJumpToLine,
+  onFixWithAi,
+  fixDisabled = false,
 }) => {
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
 
@@ -199,20 +206,36 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
                 {filtered.map((d, idx) => {
                   const jumpable = d.line != null;
                   return (
-                    <button
+                    <div
                       key={`${d.file}-${d.line}-${idx}`}
-                      onClick={() => jumpable && onJumpToLine(d.file || 'main.tex', d.line!)}
-                      disabled={!jumpable}
-                      className={`w-full flex items-start space-x-2 px-3 py-1.5 text-left border-b border-slate-100 transition-colors ${
-                        jumpable
-                          ? 'hover:bg-red-50 group cursor-pointer'
-                          : 'cursor-default'
+                      className={`w-full flex items-start space-x-2 px-3 py-1.5 text-left border-b border-slate-100 transition-colors group ${
+                        jumpable ? 'hover:bg-red-50 cursor-pointer' : 'cursor-default'
                       }`}
+                      onClick={() => jumpable && onJumpToLine(d.file || 'main.tex', d.line!)}
                     >
                       <SeverityIcon severity={d.severity} />
                       <span className="flex-1 text-[11px] font-mono text-slate-800 leading-relaxed break-words">
                         <SeverityLabel severity={d.severity} /> {d.message}
                       </span>
+                      {/* §49: Fix with AI action on every diagnostic row */}
+                      {onFixWithAi && (
+                        <button
+                          onClick={e => {
+                            e.stopPropagation();
+                            onFixWithAi(d);
+                          }}
+                          disabled={fixDisabled}
+                          title={
+                            fixDisabled
+                              ? 'Configure an AI provider in Settings to use Fix with AI (§49)'
+                              : 'Fix with AI (§49)'
+                          }
+                          className="shrink-0 flex items-center space-x-1 px-1.5 py-0.5 border-2 border-[#D11111] text-[#D11111] hover:bg-[#D11111] hover:text-white font-black text-[9px] uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-30 disabled:pointer-events-none"
+                        >
+                          <Wand2 className="w-3 h-3" />
+                          <span>Fix with AI</span>
+                        </button>
+                      )}
                       <span className="shrink-0 text-[10px] font-mono text-slate-400 group-hover:text-[#D11111] group-hover:underline">
                         {d.file || 'main.tex'}
                         {jumpable ? `:${d.line}` : ''}
@@ -220,7 +243,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
                           <span className="ml-1 text-[9px] uppercase tracking-wider">Jump</span>
                         )}
                       </span>
-                    </button>
+                    </div>
                   );
                 })}
               </div>

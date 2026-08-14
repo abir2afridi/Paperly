@@ -56,6 +56,8 @@ export interface CompilationResult {
   durationMs: number;
   compiledAt: string;
   wordCount?: number;
+  /** §48: which compile backend produced this result (e.g. 'parser'). */
+  backendUsed?: string;
 }
 
 export type AIProviderType = 'openai' | 'anthropic' | 'custom';
@@ -129,6 +131,8 @@ export interface ProjectSnapshot {
   title: string;
   createdAt: string;
   files: { path: string; content: string }[];
+  /** §51: origin of the snapshot — 'human' | 'ai' | 'collab-session'. */
+  source?: 'human' | 'ai' | 'collab-session';
 }
 
 export type SaveStatus = 'saving' | 'saved' | 'draft' | 'failed';

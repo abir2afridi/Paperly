@@ -29,4 +29,15 @@ describe('compileBackends (§4A)', () => {
     expect(result.status).toBe('success');
     expect(result.pdfDataUrl).toBeTruthy();
   });
+
+  it('stamps backendUsed on the result (§48)', async () => {
+    const backend = getCompileBackend();
+    const result = await backend.compile({
+      mainFilePath: 'main.tex',
+      files: [{ id: 'f1', projectId: 'p1', path: 'main.tex', type: 'TEX', content: '\\documentclass{article}\\begin{document}Hello\\end{document}', sizeBytes: 0, updatedAt: new Date().toISOString() }],
+      compiler: 'PDFLATEX',
+      bibTool: 'NONE',
+    });
+    expect(result.backendUsed).toBe('parser');
+  });
 });
