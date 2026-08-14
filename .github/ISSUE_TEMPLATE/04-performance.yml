@@ -1,0 +1,106 @@
+name: ⚡ Performance Issue
+description: Report a performance regression or slowness in Paperly
+title: "[Perf]: "
+labels: [performance, needs-triage]
+assignees: []
+body:
+
+  - type: markdown
+    attributes:
+      value: |
+        ## ⚡ Performance Issue
+        Thanks for helping make **Paperly** faster!
+
+        > 💡 Measured numbers are worth a thousand estimates.
+        > Please provide actual measurements from DevTools or your OS.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: ✅ Preflight Checklist
+      options:
+        - label: I have searched for existing performance issues
+          required: true
+        - label: I have confirmed this is a performance issue, not a bug
+          required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 📂 Affected Area
+      options:
+        - Initial app / project load time
+        - Editor typing latency (Monaco)
+        - LaTeX compile time
+        - PDF preview rendering / interaction
+        - Collaboration sync latency (Yjs)
+        - AI generation speed
+        - Research assistant (PDF extraction / citation search)
+        - Memory usage
+        - CPU usage
+        - Bundle size / asset size
+        - Server / API response time
+        - Build time
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: current-measurement
+    attributes:
+      label: 📊 Current Performance (Measured)
+      description: Provide a measured value — do not estimate
+      placeholder: "e.g., 4.2s load time, 380MB RAM, 1.2MB bundle"
+    validations:
+      required: true
+
+  - type: input
+    id: expected-measurement
+    attributes:
+      label: 🎯 Expected Performance
+      description: What do you think it should be? Cite a baseline or previous version
+      placeholder: "e.g., under 1s, under 100MB RAM, under 200KB bundle"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: 🔁 How to Reproduce
+      description: Exact steps to observe the performance issue
+      placeholder: |
+        1. Open a project with [N] pages of LaTeX
+        2. Type or scroll in the editor
+        3. Click Compile
+        4. Observe [Z] slowness
+    validations:
+      required: true
+
+  - type: textarea
+    id: profiling-data
+    attributes:
+      label: 📈 Profiling Data / Logs
+      description: >
+        Paste output from browser DevTools Performance tab, performance profiles,
+        or profiler output
+      placeholder: Paste profiling data here...
+      render: shell
+    validations:
+      required: false
+
+  - type: input
+    id: environment
+    attributes:
+      label: 🌐 Environment
+      description: OS, browser, hardware, and Paperly version
+      placeholder: "Chrome 131, macOS Apple Silicon, 16GB RAM / Node v22, Ubuntu 24.04"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: code-of-conduct
+    attributes:
+      label: 📜 Code of Conduct
+      options:
+        - label: I agree to follow Paperly's [Code of Conduct](../CODE_OF_CONDUCT.md)
+          required: true

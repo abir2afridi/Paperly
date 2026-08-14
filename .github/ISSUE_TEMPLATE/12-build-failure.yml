@@ -1,0 +1,120 @@
+name: 🔧 Build / CI Failure
+description: Report a build, dev-server, or tooling failure
+title: "[Build]: "
+labels: [bug, area: build, needs-triage]
+assignees: []
+body:
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 🔧 Build / CI Failure
+        Thanks for reporting a build problem.
+
+        > 💡 Paperly's build pipeline: `vite build` for the web bundle +
+        > `esbuild` for the Node server (`dist/server.cjs`), plus an optional
+        > Tauri 2 desktop build. `npm run lint` type-checks with `tsc --noEmit`.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: ✅ Preflight Checklist
+      options:
+        - label: I have searched for existing build issues
+          required: true
+        - label: I have retried from a clean state (removed node_modules and dist)
+          required: true
+
+  - type: dropdown
+    id: build-type
+    attributes:
+      label: 🔧 Failing Command
+      multiple: true
+      options:
+        - npm run dev (tsx server.ts)
+        - npm run build (vite + esbuild)
+        - npm start (node dist/server.cjs)
+        - npm run preview (vite preview)
+        - npm run lint (tsc --noEmit)
+        - npm test (vitest run)
+        - npm run tauri:dev (Tauri desktop dev)
+        - npm run tauri:build (Tauri desktop build)
+        - npm run sync:tauri-conf
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: 🟢 Node.js Version
+      description: Run `node --version` and paste the output
+      placeholder: "e.g., v20.11.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: 🖥️ Operating System
+      multiple: false
+      options:
+        - Windows 10
+        - Windows 11
+        - macOS (Intel)
+        - macOS (Apple Silicon)
+        - Ubuntu / Debian
+        - Fedora / RHEL
+        - Arch Linux
+        - Other Linux
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-message
+    attributes:
+      label: 🚨 Error Message
+      description: Paste the error message or stack trace (first 30 lines)
+      placeholder: Paste the error output here...
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: full-log
+    attributes:
+      label: 📋 Full Build Log
+      description: Paste the full command output
+      placeholder: Paste the full log here...
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: 🔁 Steps to Reproduce
+      placeholder: |
+        1. npm install
+        2. Copy .env.example to .env and fill in values
+        3. Run [failing command]
+        4. Observe [error]
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: 💬 Additional Context
+      description: Anything else that might help — package versions, recent changes, etc.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: code-of-conduct
+    attributes:
+      label: 📜 Code of Conduct
+      options:
+        - label: I agree to follow Paperly's [Code of Conduct](../CODE_OF_CONDUCT.md)
+          required: true

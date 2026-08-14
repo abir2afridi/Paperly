@@ -1,0 +1,52 @@
+name: 👋 Welcome First-Time Contributors
+
+on:
+  issues:
+    types: [opened]
+  pull_request:
+    types: [opened]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  welcome:
+    name: 👋 Send Welcome Message
+    runs-on: ubuntu-latest
+    steps:
+      - name: Welcome first-time issue opener
+        uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+          issue-message: |
+            👋 **Welcome to Paperly, and thanks for opening your first issue!**
+
+            Here's what happens next:
+            - 🔍 A maintainer will review and triage this issue
+            - 🏷️ It will be labeled and prioritized
+            - 💬 We may ask for more information if needed
+
+            **Please make sure you've:**
+            - ✅ Searched existing issues to avoid duplicates
+            - ✅ Filled out all required fields in the template
+            - ✅ Included version, OS, and reproduction steps
+
+            We aim to respond within **48–72 hours**. Thank you for helping
+            make Paperly better! 🚀
+
+          pr-message: |
+            👋 **Welcome to Paperly, and thanks for your first contribution!**
+
+            Here's what happens next:
+            - 👀 A maintainer will review your PR
+            - 💬 You may receive feedback or change requests
+            - ✅ Once approved, your PR will be merged
+
+            **While you wait, please make sure:**
+            - ✅ All checks are passing (`npm run lint`, `npm test`, `npm run build`)
+            - ✅ You've responded to any automated feedback
+            - ✅ Your PR description clearly explains what and why
+
+            We aim to review PRs within **72 hours**. Thank you for contributing! 🎉

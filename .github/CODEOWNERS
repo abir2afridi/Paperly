@@ -1,0 +1,17 @@
+# 👥 CODEOWNERS for Paperly
+# Each line: file pattern → GitHub username(s)
+# Matched owners are auto-requested for review
+
+# 🌐 Global — all files
+* @abir2afridi
+
+# 📝 Documentation
+*.md @abir2afridi
+docs/ @abir2afridi
+
+# ⚙️ CI/CD — only maintainers can change workflows
+.github/ @abir2afridi
+.github/workflows/ @abir2afridi
+
+# 🦀 Tauri desktop shell (Rust)
+src-tauri/ @abir2afridi

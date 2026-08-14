@@ -1,0 +1,58 @@
+# 🏷️ Labeler configuration — adapts to Paperly's actual structure
+
+"area: frontend":
+  - changed-files:
+    - any-glob-to-any-file:
+      - "src/components/**"
+      - "src/workspace/**"
+      - "src/data/**"
+      - "src/desktop/**"
+      - "src/App.tsx"
+      - "src/main.tsx"
+      - "src/monacoSetup.ts"
+      - "src/types.ts"
+      - "index.html"
+      - "**/*.css"
+
+"area: backend":
+  - changed-files:
+    - any-glob-to-any-file:
+      - "server.ts"
+      - "src-tauri/**"
+
+"area: api":
+  - changed-files:
+    - any-glob-to-any-file:
+      - "server.ts"
+
+"area: docs":
+  - changed-files:
+    - any-glob-to-any-file:
+      - "docs/**"
+      - "README.md"
+      - "FEATURE_AUDIT.md"
+      - ".env.example"
+
+"area: tests":
+  - changed-files:
+    - any-glob-to-any-file:
+      - "**/*.test.ts"
+      - "**/*.test.tsx"
+      - "**/__tests__/**"
+
+"area: ci-cd":
+  - changed-files:
+    - any-glob-to-any-file:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+
+"area: build":
+  - changed-files:
+    - any-glob-to-any-file:
+      - "package.json"
+      - "package-lock.json"
+      - "vite.config.*"
+      - "tsconfig*.json"
+      - "scripts/**"
+      - "src-tauri/tauri.conf.json"
+      - "src-tauri/Cargo.toml"

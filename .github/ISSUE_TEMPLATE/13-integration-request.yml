@@ -1,0 +1,98 @@
+name: 🔗 Integration Request
+description: Request integration with an external service, tool, or data source
+title: "[Integration]: "
+labels: [feature-request, needs-triage]
+assignees: []
+body:
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 🔗 Integration Request
+        Thanks for suggesting an integration for **Paperly**!
+
+        > 💡 Paperly already integrates with: Supabase (auth + data), CrossRef
+        > (DOI → BibTeX), CTAN (package management), Semantic Scholar (paper
+        > search), OpenAI-compatible / Anthropic AI providers (BYO key), and
+        > Yjs real-time collaboration.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: ✅ Preflight Checklist
+      options:
+        - label: I have searched for existing integration requests
+          required: true
+        - label: I have checked the feature plan (docs/plan.md)
+          required: true
+
+  - type: dropdown
+    id: integration-type
+    attributes:
+      label: 🔗 Integration Type
+      multiple: true
+      options:
+        - Citation manager (Zotero, Mendeley, ...)
+        - Reference database (arXiv, PubMed, Google Scholar, ...)
+        - Cloud storage (Google Drive, Dropbox, OneDrive, ...)
+        - Collaboration platform (Overleaf-style sync, GitHub, ...)
+        - AI / LLM provider
+        - Export / document format (docx, Markdown, ...)
+        - Version control / Git
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 💡 Integration Description
+      description: Describe the integration you'd like to see
+      placeholder: |
+        Paperly should integrate with [service] so that I can
+        [capability]. This would work by [mechanism].
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: 🎯 Use Case
+      description: Who would benefit and how would they use it in practice?
+      placeholder: |
+        [User type] would use this to [task], saving [effort].
+    validations:
+      required: true
+
+  - type: textarea
+    id: api-docs
+    attributes:
+      label: 📚 Service API Details
+      description: >
+        Links to the service's public API docs, auth method (API key, OAuth),
+        and any rate limits or costs that matter
+      placeholder: |
+        API docs: [URL]
+        Auth: [API key / OAuth]
+        Rate limits: [...]
+        Pricing: [...]
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 🔄 Alternative Solutions
+      description: How are you solving this today without the integration?
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: code-of-conduct
+    attributes:
+      label: 📜 Code of Conduct
+      options:
+        - label: I agree to follow Paperly's [Code of Conduct](../CODE_OF_CONDUCT.md)
+          required: true
+        - label: I am willing to open a PR to implement this integration
+          required: false

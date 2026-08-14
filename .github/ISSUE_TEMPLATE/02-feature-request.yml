@@ -1,0 +1,143 @@
+name: ✨ Feature Request
+description: Propose a new feature or enhancement for Paperly
+title: "[Feature]: "
+labels: [feature-request, needs-triage]
+assignees: []
+body:
+
+  - type: markdown
+    attributes:
+      value: |
+        ## ✨ Feature Request
+        Thanks for taking the time to suggest an improvement to **Paperly**.
+
+        > 💡 **Tip:** The best feature requests explain the problem first,
+        > then propose a solution. We care about problems more than solutions.
+
+        > 🗺️ Check the [feature plan](https://github.com/abir2afridi/Paperly/blob/main/docs/plan.md)
+        > and [discussions](https://github.com/abir2afridi/Paperly/discussions)
+        > before submitting — your idea might already be planned!
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: ✅ Preflight Checklist
+      options:
+        - label: I have searched existing issues and this is not a duplicate
+          required: true
+        - label: I have checked the feature plan and discussions
+          required: true
+        - label: I have read the documentation and this feature does not exist
+          required: true
+
+  - type: textarea
+    id: problem-statement
+    attributes:
+      label: 🎯 Problem Statement
+      description: >
+        What problem are you trying to solve? What are you currently unable to do?
+        Start with "I'm frustrated when..." or "I often need to..."
+      placeholder: |
+        I'm frustrated when I try to [X] because [Y].
+        This forces me to [workaround], which is inefficient because [Z].
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-limitation
+    attributes:
+      label: 🚧 Current Limitation
+      description: Describe the current behavior and any workarounds you use
+      placeholder: |
+        Currently, Paperly does not support [X].
+        My current workaround is [Y], but it's problematic because [Z].
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: 💡 Proposed Solution
+      description: Describe the feature you'd like to see implemented
+      placeholder: |
+        I would like Paperly to [do X].
+        This could work by [mechanism].
+        The user interface would look like [description].
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 🔄 Alternative Solutions
+      description: Have you considered any alternative approaches?
+      placeholder: |
+        Alternative 1: [description]
+        Alternative 2: [description]
+        Why these alternatives are less ideal: [reason]
+    validations:
+      required: false
+
+  - type: dropdown
+    id: value
+    attributes:
+      label: 📈 Value to You
+      description: How much would this feature improve your experience?
+      options:
+        - Critical — I cannot use Paperly effectively without this
+        - High — This would significantly improve my workflow
+        - Medium — This would be a nice improvement
+        - Low — Nice to have, but not urgent
+    validations:
+      required: true
+
+  - type: dropdown
+    id: user-type
+    attributes:
+      label: 👤 Who Benefits
+      description: Who would primarily benefit from this feature?
+      multiple: true
+      options:
+        - All users
+        - Students / researchers
+        - Academics / journal authors
+        - Teachers / educators
+        - Writers / bloggers
+        - Developers / contributors
+        - Power users (advanced LaTeX)
+    validations:
+      required: true
+
+  - type: textarea
+    id: mockups
+    attributes:
+      label: 🎨 Mockups / References
+      description: >
+        Share sketches, mockups, or links to similar features in other tools.
+        Drag and drop images here.
+      placeholder: |
+        [Mockup image or description]
+
+        Similar feature in [Other Tool]: [link]
+        Related discussion: [link]
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: 💬 Additional Context
+      description: Any other context, technical considerations, or constraints
+      placeholder: Any additional information...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: code-of-conduct
+    attributes:
+      label: 📜 Code of Conduct
+      options:
+        - label: I agree to follow Paperly's [Code of Conduct](../CODE_OF_CONDUCT.md)
+          required: true
+        - label: I am willing to open a PR to implement this feature
+          required: false

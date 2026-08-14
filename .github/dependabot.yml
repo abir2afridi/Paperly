@@ -1,0 +1,38 @@
+# 🤖 Dependabot Configuration for Paperly
+# Keeps dependencies up to date automatically
+
+version: 2
+updates:
+
+  # npm — web app, server, and tooling
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    labels:
+      - "area: build"
+      - "size: s"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      # Group minor and patch updates together
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "area: ci-cd"
+      - "size: xs"
+    commit-message:
+      prefix: "ci"

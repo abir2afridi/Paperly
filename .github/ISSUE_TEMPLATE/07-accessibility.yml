@@ -1,0 +1,122 @@
+name: ♿ Accessibility Issue
+description: Report an accessibility barrier in Paperly's user interface
+title: "[A11y]: "
+labels: [accessibility, needs-triage]
+assignees: []
+body:
+
+  - type: markdown
+    attributes:
+      value: |
+        ## ♿ Accessibility Issue
+        Paperly aims to be usable by everyone. Thank you for helping us
+        remove barriers!
+
+        > 💡 **Tip:** Describe what a keyboard-only user, screen-reader user,
+        > or low-vision user would experience.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: ✅ Preflight Checklist
+      options:
+        - label: I have searched for existing accessibility issues
+          required: true
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: ♿ Issue Type
+      options:
+        - Keyboard navigation (elements unreachable or untrappable)
+        - Screen reader (missing or wrong announcements)
+        - Color contrast (text not readable)
+        - Focus indicators (no visible focus state)
+        - Text resizing / scaling (content breaks when zoomed)
+        - Reduced motion (animations can't be disabled)
+        - ARIA roles / labels (missing or incorrect)
+        - Screen magnification (content cut off when zoomed)
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: assistive-tech
+    attributes:
+      label: 🧰 Assistive Technology Used
+      multiple: true
+      options:
+        - NVDA (Windows)
+        - JAWS (Windows)
+        - Windows Narrator
+        - VoiceOver (macOS / iOS)
+        - TalkBack (Android)
+        - Keyboard only (no mouse)
+        - Browser zoom / magnification
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected-area
+    attributes:
+      label: 📂 Affected Area / Page
+      description: Where in Paperly does the barrier occur?
+      placeholder: "e.g., Workspace → Sidebar → Project list"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 🐛 Description
+      description: Describe the accessibility barrier you encountered
+      placeholder: |
+        When I [action] using [technology], [barrier] happens.
+        Expected: [what should happen].
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: 🔁 Steps to Reproduce
+      placeholder: |
+        1. Tab to [element]
+        2. Press [key] or activate [control]
+        3. Observe [barrier]
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: 🌐 Environment
+      description: OS, browser, and assistive technology versions
+      placeholder: "e.g., Windows 11, Chrome 131, NVDA 2024.4"
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 📸 Screenshots
+      description: Optional — screenshots of the issue, especially for contrast or zoom issues
+    validations:
+      required: false
+
+  - type: textarea
+    id: suggested-fix
+    attributes:
+      label: 💡 Suggested Fix
+      description: How do you think this should be addressed?
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: code-of-conduct
+    attributes:
+      label: 📜 Code of Conduct
+      options:
+        - label: I agree to follow Paperly's [Code of Conduct](../CODE_OF_CONDUCT.md)
+          required: true

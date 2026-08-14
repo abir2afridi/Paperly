@@ -1,0 +1,95 @@
+name: 💬 Question / Support
+description: Ask a question about installing, configuring, or using Paperly
+title: "[Question]: "
+labels: [question, needs-triage]
+assignees: []
+body:
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 💬 Question / Support
+        We're happy to help you get the most out of **Paperly**!
+
+        > 🔍 **Before asking, please:**
+        > - [Search existing issues](https://github.com/abir2afridi/Paperly/issues?q=is%3Aissue)
+        > - [Check the discussions](https://github.com/abir2afridi/Paperly/discussions)
+        > - [Read the README](https://github.com/abir2afridi/Paperly#readme) and
+        >   the [docs folder](https://github.com/abir2afridi/Paperly/tree/main/docs)
+        > - [Search closed issues](https://github.com/abir2afridi/Paperly/issues?q=is%3Aclosed)
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: ✅ Preflight Checklist
+      options:
+        - label: I have searched existing issues and discussions first
+          required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: 📂 Question Category
+      options:
+        - Getting started / installation
+        - Environment setup (.env, Supabase, collab server)
+        - Account & sign-in (email, Google OAuth)
+        - Projects & templates
+        - Editing & compilation
+        - PDF preview & SyncTeX jump
+        - Collaboration & chat
+        - AI assistant & providers
+        - Research assistant & BibTeX
+        - Desktop app (Tauri)
+        - Import / export
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: ❓ Your Question
+      description: What would you like to know?
+      placeholder: |
+        I'm trying to [do X] and I'm not sure how to [Y].
+        I've already tried [Z] but...
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-tried
+    attributes:
+      label: 🔁 What I've Already Tried
+      description: Show your work — this helps us answer faster
+      placeholder: |
+        - I tried [A]
+        - I checked [B]
+        - The result was [C]
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 📦 Paperly Version
+      placeholder: "e.g., v0.0.0 or git commit hash"
+    validations:
+      required: false
+
+  - type: input
+    id: environment
+    attributes:
+      label: 🌐 Environment
+      description: OS, browser, Node version (if relevant)
+      placeholder: "e.g., Windows 11, Chrome 131, Node v20.11.0"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: code-of-conduct
+    attributes:
+      label: 📜 Code of Conduct
+      options:
+        - label: I agree to follow Paperly's [Code of Conduct](../CODE_OF_CONDUCT.md)
+          required: true

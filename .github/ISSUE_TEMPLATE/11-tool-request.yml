@@ -1,0 +1,106 @@
+name: 🛠️ Tool Request
+description: Request a new editing tool, utility, or workflow feature for the editor
+title: "[Tool]: "
+labels: [feature-request, needs-triage]
+assignees: []
+body:
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 🛠️ Tool Request
+        Thanks for suggesting a new tool for **Paperly**'s LaTeX editor!
+
+        > 🗺️ Check the [feature plan](https://github.com/abir2afridi/Paperly/blob/main/docs/plan.md)
+        > first — the tool you want may already be on the roadmap.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: ✅ Preflight Checklist
+      options:
+        - label: I have searched for existing tool requests
+          required: true
+        - label: I have checked the feature plan (docs/plan.md)
+          required: true
+
+  - type: dropdown
+    id: tool-type
+    attributes:
+      label: 🛠️ Tool Category
+      options:
+        - Editor / toolbar tool
+        - Keyboard shortcut or command palette action
+        - Automation / workflow feature
+        - Compile & diagnostics tool
+        - Formatting / cleanup tool
+        - Search & navigation tool
+        - Template / snippet pack
+        - Export / import tool
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem-statement
+    attributes:
+      label: 🎯 Problem Statement
+      description: What task are you currently unable to do efficiently?
+      placeholder: |
+        I often need to [task], and Paperly currently requires me to
+        [workaround] which takes [time/effort].
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-tool
+    attributes:
+      label: 💡 Proposed Tool
+      description: Describe the tool or utility you'd like to see
+      placeholder: |
+        A [tool] that lets me [action]. It would work by [mechanism].
+        The interface would look like [description].
+    validations:
+      required: true
+
+  - type: textarea
+    id: similar-tools
+    attributes:
+      label: 🔗 Similar Tools in Other Editors
+      description: How do other LaTeX editors handle this?
+      placeholder: |
+        Overleaf does this by [X].
+        VS Code LaTeX Workshop does this by [Y].
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 🔄 Alternative Solutions
+      description: Any workarounds or alternative approaches you've considered?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: value
+    attributes:
+      label: 📈 Value to You
+      description: How much would this tool improve your workflow?
+      options:
+        - Critical — I cannot work efficiently without this
+        - High — This would significantly improve my workflow
+        - Medium — This would be a nice improvement
+        - Low — Nice to have, but not urgent
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: code-of-conduct
+    attributes:
+      label: 📜 Code of Conduct
+      options:
+        - label: I agree to follow Paperly's [Code of Conduct](../CODE_OF_CONDUCT.md)
+          required: true
+        - label: I am willing to open a PR to implement this tool
+          required: false

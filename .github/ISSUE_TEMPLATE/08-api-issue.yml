@@ -1,0 +1,115 @@
+name: 🔌 API Issue
+description: Report a problem with Paperly's server API endpoints
+title: "[API]: "
+labels: [area: api, needs-triage]
+assignees: []
+body:
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 🔌 API Issue
+        Thanks for reporting an issue with Paperly's API.
+
+        > 💡 The API is the Express server in `server.ts` — routes under
+        > `/api/*` (AI providers, session management, chat retention, and the
+        > Yjs collab WebSocket at `/collab`).
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: ✅ Preflight Checklist
+      options:
+        - label: I have searched for existing API issues
+          required: true
+        - label: I have confirmed this is an API issue (check the Network tab or curl)
+          required: true
+        - label: This is not a UI-only issue
+          required: true
+
+  - type: input
+    id: endpoint
+    attributes:
+      label: 🔗 Endpoint
+      description: Which endpoint is affected?
+      placeholder: "e.g., /api/ai/generate, /api/ai/providers/:id/test, /collab"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: http-method
+    attributes:
+      label: 🧪 HTTP Method
+      options:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - WebSocket (ws/wss)
+    validations:
+      required: true
+
+  - type: input
+    id: observed-status
+    attributes:
+      label: 📟 Observed Status Code
+      description: What status code did you receive?
+      placeholder: "e.g., 401, 429, 500"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: ✅ Expected Behavior
+      description: What should the API return?
+      placeholder: "Expected: 200 with { ok: true } and the generated text."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: ❌ Actual Behavior
+      description: What did the API actually return?
+      placeholder: "Actual: 500 with { error: '...' }"
+    validations:
+      required: true
+
+  - type: textarea
+    id: request-payload
+    attributes:
+      label: 📤 Request Payload
+      description: Paste the request body you sent (redact API keys and tokens!)
+      placeholder: '{"providerId": "...", "prompt": "..."}'
+      render: json
+    validations:
+      required: false
+
+  - type: textarea
+    id: response-body
+    attributes:
+      label: 📥 Response Body
+      description: Paste the response body you received
+      placeholder: '{"error": "..."}'
+      render: json
+    validations:
+      required: false
+
+  - type: input
+    id: environment
+    attributes:
+      label: 🌐 Environment
+      description: Paperly version, auth state (logged in / out), and how you called the API
+      placeholder: "e.g., v0.0.0, logged in, via browser fetch"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: code-of-conduct
+    attributes:
+      label: 📜 Code of Conduct
+      options:
+        - label: I agree to follow Paperly's [Code of Conduct](../CODE_OF_CONDUCT.md)
+          required: true

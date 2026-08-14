@@ -1,0 +1,117 @@
+name: 🎨 UI / UX Issue
+description: Report a visual bug, layout problem, or usability issue
+title: "[UI]: "
+labels: [ui, needs-triage]
+assignees: []
+body:
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 🎨 UI / UX Issue
+        Thanks for helping polish **Paperly**'s interface!
+
+        > 📸 Screenshots are **required** for UI issues — a picture tells us more
+        > than a paragraph of description.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: ✅ Preflight Checklist
+      options:
+        - label: I have searched for existing UI/UX issues
+          required: true
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: 🎨 Issue Type
+      options:
+        - Visual bug (something renders incorrectly)
+        - Layout broken (elements overlap, misaligned, overflow)
+        - Responsiveness issue (wrong on certain screen sizes)
+        - Dark / light mode issue
+        - Animation or transition glitch
+        - Poor usability (confusing flow or interaction)
+        - Missing loading state or feedback
+        - Inconsistent design (doesn't match the rest of the UI)
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: device
+    attributes:
+      label: 📱 Device Type
+      options:
+        - Desktop (1920px+)
+        - Laptop (1280–1920px)
+        - Tablet (768–1280px)
+        - Mobile (< 768px)
+        - All sizes affected
+    validations:
+      required: true
+
+  - type: dropdown
+    id: browser
+    attributes:
+      label: 🌐 Browser
+      options:
+        - Chrome / Chromium
+        - Firefox
+        - Safari
+        - Edge
+        - Brave
+        - Mobile Safari (iOS)
+        - Chrome for Android
+        - Tauri desktop app
+        - All browsers affected
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected-area
+    attributes:
+      label: 📂 Affected Area / Page
+      description: Where in Paperly does this occur?
+      placeholder: "e.g., Workspace → Editor toolbar → Compile button"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 🐛 Description
+      description: Describe the visual or usability issue
+      placeholder: "The [element] appears [broken/wrong] when [condition]."
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 📸 Screenshots (Required for UI issues)
+      description: >
+        Drag and drop screenshots here.
+        Before/After comparisons are extremely helpful.
+      placeholder: |
+        Before: [screenshot]
+        After / Current state: [screenshot]
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: 💡 Suggested Fix
+      description: How do you think it should look or behave?
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: code-of-conduct
+    attributes:
+      label: 📜 Code of Conduct
+      options:
+        - label: I agree to follow Paperly's [Code of Conduct](../CODE_OF_CONDUCT.md)
+          required: true

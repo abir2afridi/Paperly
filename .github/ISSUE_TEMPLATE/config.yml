@@ -1,0 +1,21 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Community Discussions
+    url: https://github.com/abir2afridi/Paperly/discussions
+    about: >
+      Ask questions, share ideas, and get help from the community.
+      Do not use Issues for support questions.
+  - name: 📖 Documentation
+    url: https://github.com/abir2afridi/Paperly/tree/main/docs
+    about: >
+      Read the README and the docs/ folder (plan, AI providers, security,
+      compilation) before opening an issue.
+  - name: 🔒 Security Vulnerabilities
+    url: https://github.com/abir2afridi/Paperly/security/advisories/new
+    about: >
+      Report security issues privately — never in a public issue.
+  - name: 🗺️ Roadmap
+    url: https://github.com/abir2afridi/Paperly/discussions
+    about: >
+      Check the feature plan (docs/plan.md) and discussions before
+      requesting features.
