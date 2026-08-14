@@ -6,7 +6,7 @@ A full-stack, browser-based **LaTeX editor** with real-time PDF compilation, ric
 
 ## ✨ Features
 
-- **Live LaTeX Compilation** — compile `.tex` projects to a real PDF with `.log` diagnostics (error line numbers surfaced back into the editor), lint warnings, and a `CompileBackend` abstraction with a pluggable factory (`src/services/compileBackends.ts`)
+- **Live LaTeX Compilation** — compile `.tex` projects to a real PDF with `.log` diagnostics (error line numbers surfaced back into the editor), lint warnings, and a `CompileBackend` abstraction with a pluggable factory (`src/services/compileBackends.ts`); the backend actually used is labeled in the PDF viewer so a simplified preview is never mistaken for a real TeX run (§48)
 - **Monaco Editor** — full LaTeX syntax highlighting, snippet completion, live `.bib` citation autocomplete, inline diagnostics, and LaTeX-aware spell checking (nspell, squiggly underlines, "did you mean" suggestions)
 - **Visual Rich-Text Mode** — switch between source code and a visual editor view
 - **PDF.js Preview** — interactive PDF rendering with zoom, rotate, search, dark mode, per-page annotations, and **SyncTeX-style source jump** (click PDF text → editor jumps to the matching source line)
@@ -16,9 +16,11 @@ A full-stack, browser-based **LaTeX editor** with real-time PDF compilation, ric
 - **CrossRef DOI Search** — look up citations by DOI and auto-append formatted BibTeX
 - **Real-Time Collaboration** — Yjs CRDT document sync over a WebSocket (y-websocket), live presence cursors, project chat room, comments, and an append-only activity feed
 - **AI Assistant** — explain, fix, rewrite, and generate abstracts using your own BYO-Key providers, behind a provider-agnostic adapter (`AIProviderAdapter` with `chat()`/`testConnection()` for OpenAI-compatible, Anthropic, and custom HTTP endpoints)
+- **Fix-With-AI (§49)** — per-diagnostic fix from the log panel: sends the error + surrounding context to your provider, shows the proposed change as a line diff, then Apply / Copy / Regenerate / Recompile-to-verify, with a hand-off to the AI chat
+- **Agentic AI Chat (§50)** — an Agent tab with project-scoped tools (file tree, search, read-into-context); the model proposes edits as structured JSON, reviewed in a pending-changes queue (per-file diff, Apply / Discard / Edit-before-apply / Apply all, max 20 edits per turn) — nothing is written without your approval
 - **Secure Provider Keys** — AES-256-GCM encrypted API keys with masked display and live connection testing
-- **Research Assistant** — upload a PDF (client-side text extraction via pdf.js), search Semantic Scholar, add papers as BibTeX, and generate a LaTeX literature review or fact-check a claim against the source
-- **Version History** — snapshots, diff viewing, and restore points
+- **Research Assistant** — upload one or more PDFs (client-side text extraction via pdf.js), search Semantic Scholar, add papers as BibTeX, and generate a LaTeX literature review or fact-check a claim against the source; an n-gram originality safeguard flags passages that too closely mirror your sources, and the publication-readiness check (§44) re-runs that heuristic against registered papers
+- **Version History** — snapshots (tagged by origin: human / AI / collab), diff viewing, and restore points; AI edit batches record a pre-edit snapshot so you can revert exactly the touched files (§51)
 - **Session Management** — Settings → Sessions lists your logged-in devices (GoTrue admin API) with one-click revocation
 - **Chat Retention** — per-user chat auto-delete (7/30/90 days or keep forever) enforced by a server-side sweep
 - **PWA / Offline** — web app manifest, service worker, offline banner (production builds)
@@ -53,7 +55,11 @@ A full-stack, browser-based **LaTeX editor** with real-time PDF compilation, ric
 │   │   ├── compileBackends.ts     # CompileBackend interface + factory (§4A)
 │   │   ├── aiEngine.ts            # BYO-Key provider config + generation client
 │   │   ├── aiProviderAdapter.ts   # Provider-agnostic adapters (chat/testConnection)
+│   │   ├── aiFix.ts               # Fix-with-AI prompt/response parsing (§49)
+│   │   ├── agenticChat.ts         # Agent chat: tools, structured-output schema (§50)
 │   │   ├── researchAssistant.ts   # PDF extraction, Semantic Scholar, BibTeX, AI prompts
+│   │   ├── originalityCheck.ts    # N-gram overlap safeguard (§42)
+│   │   ├── researchSources.ts     # Source-paper registry for the §44 originality heuristic
 │   │   ├── spellCheck.ts          # LaTeX-aware spell check (nspell)
 │   │   ├── syncTexMatch.ts        # PDF text → source line matching
 │   │   ├── collab.ts              # Yjs collaboration helpers
@@ -65,7 +71,8 @@ A full-stack, browser-based **LaTeX editor** with real-time PDF compilation, ric
 │   │   └── …                      # rateLimit, zipSecurity, publicationCheck, snapshotDiff, etc.
 │   ├── vendor/                    # Vendored English Hunspell dictionary (nspell)
 │   └── components/                # Navbar, Sidebar, MonacoEditor, PdfViewer, OnboardingTour,
-│                                  # ResearchAssistantModal, SettingsModal, modals, etc.
+│                                  # ResearchAssistantModal, FixWithAiModal, AgentChatTab,
+│                                  # SettingsModal, modals, etc.
 ├── supabase/migrations/           # SQL migrations (chat retention, annotations, …)
 ├── public/                        # Static assets, PWA manifest + service worker
 ├── .github/                       # Issue forms, PR template, workflows, labels,
@@ -108,7 +115,7 @@ npm start          # node dist/server.cjs
 | `npm run preview`   | Preview the built frontend     |
 | `npm run clean`     | Remove `dist/` and `server.js` |
 | `npm run lint`      | Type-check with `tsc --noEmit` |
-| `npm test`          | Run the Vitest suite (149 tests) |
+| `npm test`          | Run the Vitest suite (193 tests) |
 | `npm run tauri:dev` | Run the Tauri desktop shell    |
 
 ## 🤖 AI Providers
