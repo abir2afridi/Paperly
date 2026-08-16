@@ -1,34 +1,70 @@
-@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..800;1,6..72,300..800&family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=JetBrains+Mono:ital,wght@0,400..800;1,400..800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&display=swap');
 @import "tailwindcss";
 @import "katex/dist/katex.min.css";
 
-@theme {
-  --font-editorial: 'Newsreader', Georgia, 'Times New Roman', serif;
-  --font-editorial-sans: 'Plus Jakarta Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-editorial-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, 'SFMono-Regular', monospace;
+/* ============================================================
+   Design language: "Supabaze-inspired" (docs/DESIGN-supabase.md)
+   White-canvas marketing track, near-black ink, one emerald
+   primary (#3ecf8e) as the only chromatic event, greyscale
+   hairline ladder, humanist-sans display tier (Inter — the
+   open-source analogue to Circular) at weight 500 with negative
+   tracking. The dark `data-theme-mode="dark"` variant maps to
+   the canvas-night track; the workspace chrome (slate tokens
+   below) is untouched and stays theme-driven.
+   ============================================================ */
 
-  /* Editorial Paper & Scholarly Journal palette */
-  --color-canvas: #fcfaf7;
-  --color-paper: #f4f0e8;
-  --color-paper-deep: #ece9e4;
-  --color-ink: #191919;
-  --color-ink-muted: #706c64;
-  --color-ink-muted-2: #55524d;
+@theme {
+  --font-editorial: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-editorial-sans: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-editorial-mono: ui-monospace, 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+
+  /* Supabaze palette — white canvas & near-black ink */
+  --color-canvas: #ffffff;
+  --color-paper: #fafafa;
+  --color-paper-deep: #ededed;
+  --color-ink: #171717;
+  --color-ink-muted: #707070;
+  --color-ink-muted-2: #9a9a9a;
+
+  /* The single chromatic event — emerald primary */
+  --color-primary: #3ecf8e;
+  --color-primary-deep: #24b47e;
+  --color-primary-soft: #4ade80;
+  --color-on-primary: #171717;
+
+  /* Dark surfaces (code blocks, featured tier, product mockups) */
+  --color-night: #1c1c1c;
+  --color-night-soft: #202020;
+
+  /* Hairline grey ladder */
+  --color-hairline: #dfdfdf;
+  --color-hairline-strong: #c7c7c7;
+  --color-hairline-cool: #ededed;
 }
 
-/* Dark editorial variant — swaps the token values on the html element */
+/* Dark editorial variant — maps tokens to the canvas-night track */
 html[data-theme-mode="dark"] {
-  --color-canvas: #17140f;
-  --color-paper: #211e19;
-  --color-paper-deep: #2a2620;
-  --color-ink: #f2ede3;
-  --color-ink-muted: #a49d90;
-  --color-ink-muted-2: #8d867a;
+  --color-canvas: #1c1c1c;
+  --color-paper: #202020;
+  --color-paper-deep: #262626;
+  --color-ink: #f2f2f2;
+  --color-ink-muted: #9a9a9a;
+  --color-ink-muted-2: #b2b2b2;
 }
 
 @layer base {
   body {
     @apply bg-canvas text-ink font-sans antialiased;
+  }
+
+  /* Supabaze display tier: humanist sans at weight 500 with negative
+     tracking (docs/DESIGN-supabase.md typography principles). */
+  .font-editorial {
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+  .font-editorial.font-bold {
+    font-weight: 500;
   }
 }
 
@@ -171,9 +207,3 @@ html[data-theme-mode="dark"] .grid-pattern-dark {
 .hover\:text-\[\#D11111\]:hover { color: var(--th-accent, #d11111); }
 .bg-\[\#D11111\].text-white { color: var(--th-on-accent, #ffffff); }
 .hover\:bg-\[\#D11111\]:hover.hover\:text-white:hover { color: var(--th-on-accent, #ffffff); }
-
-/* Faint editorial paper grid (used on landing/dashboard heroes) */
-.grid-pattern-paper {
-  background-image: radial-gradient(rgba(25, 25, 25, 0.08) 1px, transparent 1px);
-  background-size: 26px 26px;
-}

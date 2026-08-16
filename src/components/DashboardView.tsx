@@ -130,16 +130,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return (
       <div
         key={proj.id}
-        className="bg-paper border border-ink/15 hover:border-ink/40 p-5 transition-all flex flex-col justify-between group relative"
+        className="bg-canvas border border-hairline hover:border-hairline-strong p-5 transition-all flex flex-col justify-between group relative rounded-xl"
       >
         <div>
           {/* Serial Tag + Compiler Badge */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center space-x-2">
-              <span className="bg-ink text-canvas font-bold font-editorial-mono text-[10px] px-2 py-0.5 uppercase tracking-widest border border-ink">
+              <span className="bg-ink text-canvas font-bold font-editorial-mono text-[10px] px-2 py-0.5 uppercase tracking-widest border border-ink rounded-md">
                 SERIAL {serialNumStr}
               </span>
-              <span className="border border-ink/20 bg-canvas text-ink-muted-2 font-editorial-mono text-[9px] px-1.5 py-0.5 uppercase">
+              <span className="border border-hairline-strong bg-paper text-ink-muted-2 font-editorial-mono text-[9px] px-1.5 py-0.5 uppercase rounded-full">
                 {proj.compiler}
               </span>
             </div>
@@ -200,7 +200,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           ) : (
             <h3
               onClick={() => onOpenProject(proj)}
-              className="font-editorial font-bold text-ink text-base tracking-tight mb-1 cursor-pointer group-hover:underline transition-colors line-clamp-1"
+              className="font-editorial text-ink text-base tracking-tight mb-1 cursor-pointer group-hover:underline transition-colors line-clamp-1"
             >
               {proj.name}
             </h3>
@@ -212,7 +212,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Card Footer Metadata & Launch Action */}
-        <div className="pt-3 border-t border-ink/15 flex items-center justify-between text-xs">
+        <div className="pt-3 border-t border-hairline flex items-center justify-between text-xs">
           <div className="flex items-center space-x-2 text-[10px] font-editorial-mono text-ink-muted-2">
             <Clock className="w-3 h-3" />
             <span>{new Date(proj.updatedAt).toLocaleDateString()}</span>
@@ -222,7 +222,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <button
             onClick={() => onOpenProject(proj)}
-            className="px-3.5 py-1.5 bg-canvas hover:bg-ink text-ink hover:text-canvas border border-ink/20 hover:border-ink font-bold text-xs uppercase tracking-wider transition-colors flex items-center space-x-1.5"
+            className="px-3.5 py-1.5 bg-canvas hover:bg-ink text-ink hover:text-canvas border border-hairline-strong hover:border-ink font-bold text-xs uppercase tracking-wider transition-colors flex items-center space-x-1.5 rounded-md"
           >
             <span>Launch Workspace</span>
             <ArrowRight className="w-3.5 h-3.5" />
@@ -235,14 +235,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const renderTemplateCard = (template: Template) => (
     <div
       key={template.id}
-      className="bg-paper border border-ink/15 p-4 hover:border-ink/40 transition-colors flex flex-col justify-between"
+      className="bg-canvas border border-hairline p-4 hover:border-hairline-strong transition-colors flex flex-col justify-between rounded-xl"
     >
       <div>
         <div className="flex items-center justify-between mb-2">
           <span className="font-bold text-ink text-xs tracking-tight">
             {template.name}
           </span>
-          <span className="border border-ink/20 bg-canvas text-ink-muted-2 font-editorial-mono text-[9px] px-1.5 py-0.2 uppercase">
+          <span className="border border-hairline-strong bg-paper text-ink-muted-2 font-editorial-mono text-[9px] px-1.5 py-0.2 uppercase rounded-full">
             {template.category}
           </span>
         </div>
@@ -253,7 +253,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       <button
         onClick={() => onSelectTemplate(template)}
-        className="w-full py-1.5 bg-canvas hover:bg-ink text-ink hover:text-canvas border border-ink/20 hover:border-ink font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center space-x-1.5"
+        className="w-full py-1.5 bg-canvas hover:bg-ink text-ink hover:text-canvas border border-hairline-strong hover:border-ink font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center space-x-1.5 rounded-md"
       >
         <span>Use {template.name}</span>
         <ArrowRight className="w-3.5 h-3.5" />
@@ -263,18 +263,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="h-screen bg-canvas text-ink font-editorial-sans flex flex-col overflow-hidden selection:bg-ink selection:text-canvas">
-      {/* Dashboard Top Header */}
-      <header className="sticky top-0 z-40 bg-canvas border-b border-ink/15">
+      {/* Dashboard Top Header — nav-bar-light: white canvas, hairline border */}
+      <header className="sticky top-0 z-40 bg-canvas border-b border-hairline">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Logo Brand */}
           <div className="flex items-center space-x-3 cursor-pointer" onClick={onGoHome}>
-            <div className="w-9 h-9 bg-ink flex items-center justify-center text-canvas font-editorial font-bold text-xl border border-ink">
-              TeX
+            <div className="w-9 h-9 bg-ink flex items-center justify-center text-canvas font-editorial text-xl border border-ink rounded-md">
+              TeX<span className="text-primary">.</span>
             </div>
             <div className="flex flex-col">
-              <span className="font-editorial font-bold text-ink text-lg tracking-tight leading-none flex items-center space-x-1">
+              <span className="font-editorial text-ink text-lg tracking-tight leading-none flex items-center space-x-1">
                 <span>TeXForge</span>
-                <span className="border border-ink/20 bg-paper text-ink-muted-2 font-editorial-mono text-[9px] px-1.5 py-0.5 uppercase tracking-widest ml-1">
+                <span className="border border-hairline-strong bg-paper text-ink-muted-2 font-editorial-mono text-[9px] px-1.5 py-0.5 uppercase tracking-widest ml-1 rounded-full">
                   Dashboard
                 </span>
               </span>
@@ -288,7 +288,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="flex items-center space-x-3">
             <button
               onClick={onToggleThemeMode}
-              className="px-3 py-1.5 bg-paper hover:bg-paper-deep text-ink-muted-2 border border-ink/20 font-bold text-xs flex items-center space-x-1.5 hover:text-ink transition-colors"
+              className="px-3 py-1.5 bg-paper hover:bg-paper-deep text-ink-muted-2 border border-hairline-strong font-bold text-xs flex items-center space-x-1.5 hover:text-ink transition-colors rounded-md"
               title={activeThemeMode === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             >
               {activeThemeMode === 'dark' ? (
@@ -303,7 +303,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <button
               onClick={onOpenThemeSelector}
-              className="px-3 py-1.5 bg-paper hover:bg-paper-deep text-ink-muted-2 border border-ink/20 font-bold text-xs flex items-center space-x-1.5 hover:text-ink transition-colors"
+              className="px-3 py-1.5 bg-paper hover:bg-paper-deep text-ink-muted-2 border border-hairline-strong font-bold text-xs flex items-center space-x-1.5 hover:text-ink transition-colors rounded-md"
               title="Change Workspace Theme"
             >
               <Palette className="w-3.5 h-3.5 text-ink" />
@@ -312,12 +312,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <button
               onClick={onGoHome}
-              className="px-3 py-1.5 bg-paper hover:bg-paper-deep text-ink-muted-2 border border-ink/20 font-bold text-xs uppercase tracking-wider hover:text-ink transition-colors"
+              className="px-3 py-1.5 bg-paper hover:bg-paper-deep text-ink-muted-2 border border-hairline-strong font-bold text-xs uppercase tracking-wider hover:text-ink transition-colors rounded-md"
             >
               Home Page
             </button>
 
-            <div className="h-5 w-px bg-ink/15 hidden sm:block" />
+            <div className="h-5 w-px bg-hairline hidden sm:block" />
 
             {/* User Badge Dropdown — Settings & Log Out under the profile */}
             <div className="relative pl-1">
@@ -343,9 +343,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   {/* Backdrop to close on outside click */}
                   <div className="fixed inset-0 z-40" onClick={() => setIsUserMenuOpen(false)} />
 
-                  <div className="absolute right-0 top-full mt-2 z-50 w-56 bg-paper border border-ink/20 shadow-[4px_4px_0_0_rgba(10,10,10,0.15)]">
+                  <div className="absolute right-0 top-full mt-2 z-50 w-56 bg-canvas border border-hairline-strong shadow-[0_8px_24px_rgba(0,0,0,0.12)] rounded-xl overflow-hidden">
                     {/* Profile Summary */}
-                    <div className="p-3 border-b border-ink/15">
+                    <div className="p-3 border-b border-hairline">
                       <p className="text-xs font-bold text-ink truncate">{user.name}</p>
                       <p className="text-[10px] font-editorial-mono text-ink-muted-2 truncate">{user.email}</p>
                     </div>
@@ -380,7 +380,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </header>
 
       {/* Mobile Section Tabs */}
-      <div className="lg:hidden sticky top-16 z-30 bg-canvas border-b border-ink/15">
+      <div className="lg:hidden sticky top-16 z-30 bg-canvas border-b border-hairline">
         <div className="flex overflow-x-auto px-4">
           {NAV_SECTIONS.map(section => {
             const isActive = activeSection === section.id;
@@ -405,9 +405,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Main Dashboard Container */}
       <div className="flex flex-1 min-h-0">
         {/* Desktop Sidebar — fixed height, independent internal scroll */}
-        <aside className="hidden lg:flex w-60 shrink-0 flex-col border-r border-ink/15 bg-paper">
+        <aside className="hidden lg:flex w-60 shrink-0 flex-col border-r border-hairline bg-paper">
           {/* Sidebar User Card */}
-          <div className="p-4 border-b border-ink/15 flex items-center space-x-3">
+          <div className="p-4 border-b border-hairline flex items-center space-x-3">
             <UserAvatar name={user.name} email={user.avatarUrl || user.email} size={40} />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-bold text-ink truncate">{user.name}</p>
@@ -448,7 +448,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </nav>
 
           {/* Sidebar Footer: Sync Status + Sign Out */}
-          <div className="p-3 border-t border-ink/15 space-y-2">
+          <div className="p-3 border-t border-hairline space-y-2">
             <div className="flex items-center justify-between text-[9px] font-editorial-mono uppercase tracking-widest">
               <span className="text-ink-muted-2">Cloud Sync</span>
               <span className={isCloudUser ? 'text-ink font-bold' : 'text-ink-muted-2'}>
@@ -457,7 +457,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
             <button
               onClick={onLogout}
-              className="w-full py-2 bg-canvas border border-ink/20 hover:bg-ink hover:text-canvas hover:border-ink text-xs font-bold uppercase tracking-wider flex items-center justify-center space-x-2 transition-colors"
+              className="w-full py-2 bg-canvas border border-hairline-strong hover:bg-ink hover:text-canvas hover:border-ink text-xs font-bold uppercase tracking-wider flex items-center justify-center space-x-2 transition-colors rounded-md"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Sign Out</span>
@@ -471,29 +471,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {activeSection === 'overview' && (
               <>
                 {/* User Banner Greeting & Quick Stats */}
-                <div className="bg-paper border border-ink/20 p-6 relative overflow-hidden">
+                <div className="bg-paper border border-hairline p-6 relative overflow-hidden rounded-xl">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
             <div className="space-y-2 max-w-xl">
-              <div className="inline-flex items-center space-x-2 border border-ink/20 bg-canvas px-2.5 py-0.5 text-[10px] font-editorial-mono text-ink-muted-2 uppercase tracking-widest">
+              <div className="inline-flex items-center space-x-2 border border-hairline-strong bg-canvas px-2.5 py-0.5 text-[10px] font-editorial-mono text-ink-muted-2 uppercase tracking-widest rounded-full">
                 <Sparkles className="w-3 h-3 text-ink" />
                 <span>Verified Academic Author Workspace</span>
               </div>
 
-              <h1 className="font-editorial text-2xl sm:text-3xl font-bold text-ink tracking-tight">
+              <h1 className="font-editorial text-2xl sm:text-3xl text-ink tracking-tight">
                 Welcome back, {user.name}
               </h1>
 
               <p className="text-ink-muted text-xs sm:text-sm font-medium leading-relaxed">
-                Manage your ordered research manuscripts, BibTeX citation files, and WASM LaTeX compilation workspace.
+                Manage your ordered research manuscripts, BibTeX citation files, and instant browser-based LaTeX workspace.
               </p>
             </div>
 
-            {/* Quick Action Button */}
+            {/* Quick Action Button — primary emerald */}
             <div className="flex flex-wrap items-center gap-3">
               <button
                 data-tour="new-project"
                 onClick={onCreateNewProject}
-                className="px-5 py-3 bg-ink hover:opacity-90 text-canvas font-bold text-xs uppercase tracking-widest flex items-center space-x-2 transition-opacity"
+                className="px-5 py-3 bg-primary hover:bg-primary-deep text-on-primary font-bold text-xs uppercase tracking-widest flex items-center space-x-2 transition-colors rounded-md"
               >
                 <Plus className="w-4 h-4" />
                 <span>Create New Project (Auto Serial)</span>
@@ -502,15 +502,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           {/* Quick Metrics Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-6 mt-6 border-t border-ink/15 text-xs font-editorial-mono">
-            <div className="p-3 bg-canvas border border-ink/15">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-6 mt-6 border-t border-hairline text-xs font-editorial-mono">
+            <div className="p-3 bg-canvas border border-hairline rounded-md">
               <div className="text-ink-muted-2 uppercase text-[10px] font-bold">Total Projects</div>
               <div className="font-editorial text-xl font-bold text-ink mt-1">
                 #{String(projects.length).padStart(2, '0')}
               </div>
             </div>
 
-            <div className="p-3 bg-canvas border border-ink/15">
+            <div className="p-3 bg-canvas border border-hairline rounded-md">
               <div className="text-ink-muted-2 uppercase text-[10px] font-bold">TeX Compiler Engine</div>
               <div className="text-xs font-bold text-ink mt-2 flex items-center space-x-1">
                 <CheckCircle2 className="w-3.5 h-3.5" />
@@ -518,12 +518,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
 
-            <div className="p-3 bg-canvas border border-ink/15">
+            <div className="p-3 bg-canvas border border-hairline rounded-md">
               <div className="text-ink-muted-2 uppercase text-[10px] font-bold">Citation Library</div>
               <div className="text-xs font-bold text-ink mt-2">BibTeX DOI Lookup Active</div>
             </div>
 
-            <div className="p-3 bg-canvas border border-ink/15">
+            <div className="p-3 bg-canvas border border-hairline rounded-md">
               <div className="text-ink-muted-2 uppercase text-[10px] font-bold">Active Theme</div>
               <div className="text-xs font-bold text-ink mt-2">{activeThemeObj.name}</div>
             </div>
@@ -534,7 +534,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <div className="space-y-4">
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div>
-                      <h3 className="font-editorial text-lg font-bold text-ink uppercase tracking-wider flex items-center space-x-2">
+                      <h3 className="font-editorial text-lg text-ink uppercase tracking-wider flex items-center space-x-2">
                         <FolderPlus className="w-5 h-5 text-ink" />
                         <span>Recent Manuscripts</span>
                       </h3>
@@ -544,7 +544,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     </div>
                     <button
                       onClick={() => setActiveSection('projects')}
-                      className="px-3 py-1.5 bg-canvas border border-ink/20 text-ink-muted-2 hover:text-ink hover:border-ink text-xs font-bold uppercase tracking-wider flex items-center space-x-1.5 transition-colors"
+                      className="px-3 py-1.5 bg-canvas border border-hairline-strong text-ink-muted-2 hover:text-ink hover:border-ink text-xs font-bold uppercase tracking-wider flex items-center space-x-1.5 transition-colors rounded-md"
                     >
                       <span>All Projects</span>
                       <ArrowRight className="w-3.5 h-3.5" />
@@ -554,12 +554,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {indexedProjects.slice(0, 3).map(proj => renderProjectCard(proj))}
                     {indexedProjects.length === 0 && (
-                      <div className="md:col-span-2 lg:col-span-3 p-12 text-center bg-paper border border-ink/20 space-y-3">
+                      <div className="md:col-span-2 lg:col-span-3 p-12 text-center bg-paper border border-hairline space-y-3 rounded-xl">
                         <FileText className="w-10 h-10 text-ink-muted-2 mx-auto" />
                         <p className="text-ink font-bold text-sm">No projects yet — create your first manuscript.</p>
                         <button
                           onClick={onCreateNewProject}
-                          className="bg-ink text-canvas px-4 py-2 text-xs font-bold uppercase tracking-widest hover:opacity-90 transition-opacity"
+                          className="bg-primary hover:bg-primary-deep text-on-primary px-4 py-2 text-xs font-bold uppercase tracking-widest transition-colors rounded-md"
                         >
                           Create New Project
                         </button>
@@ -569,10 +569,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </div>
 
                 {/* Academic Templates (Overview) */}
-                <div className="space-y-4 pt-4 border-t border-ink/15">
+                <div className="space-y-4 pt-4 border-t border-hairline">
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div>
-                      <h3 className="font-editorial text-lg font-bold text-ink uppercase tracking-wider flex items-center space-x-2">
+                      <h3 className="font-editorial text-lg text-ink uppercase tracking-wider flex items-center space-x-2">
                         <BookOpen className="w-5 h-5 text-ink" />
                         <span>Academic Templates</span>
                       </h3>
@@ -582,7 +582,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     </div>
                     <button
                       onClick={() => setActiveSection('templates')}
-                      className="px-3 py-1.5 bg-canvas border border-ink/20 text-ink-muted-2 hover:text-ink hover:border-ink text-xs font-bold uppercase tracking-wider flex items-center space-x-1.5 transition-colors"
+                      className="px-3 py-1.5 bg-canvas border border-hairline-strong text-ink-muted-2 hover:text-ink hover:border-ink text-xs font-bold uppercase tracking-wider flex items-center space-x-1.5 transition-colors rounded-md"
                     >
                       <span>All Templates</span>
                       <ArrowRight className="w-3.5 h-3.5" />
@@ -600,14 +600,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <>
                 {/* PROJECT SERIAL MANAGEMENT SECTION */}
                 <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-paper border border-ink/20 p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-paper border border-hairline p-4 rounded-xl">
             <div>
               <div className="flex items-center space-x-2">
                 <FolderPlus className="w-5 h-5 text-ink" />
-                <h2 className="font-editorial text-lg font-bold text-ink uppercase tracking-wider">
+                <h2 className="font-editorial text-lg text-ink uppercase tracking-wider">
                   Serial Project Directory
                 </h2>
-                <span className="border border-ink/20 bg-canvas text-ink-muted-2 px-2 py-0.5 text-[10px] font-editorial-mono font-bold">
+                <span className="border border-hairline-strong bg-canvas text-ink-muted-2 px-2 py-0.5 text-[10px] font-editorial-mono font-bold rounded-full">
                   {filteredProjects.length} Projects
                 </span>
               </div>
@@ -626,12 +626,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Search project or #serial..."
-                  className="bg-canvas border border-ink/20 text-ink text-xs pl-8 pr-3 py-2 w-full sm:w-56 focus:outline-none focus:border-ink placeholder:text-ink-muted-2 font-editorial-mono"
+                  className="bg-canvas border border-hairline-strong text-ink text-xs pl-8 pr-3 py-2 w-full sm:w-56 focus:outline-none focus:border-ink placeholder:text-ink-muted-2 font-editorial-mono rounded-md"
                 />
               </div>
 
               {/* Serial Sort Dropdown */}
-              <div className="flex items-center space-x-1.5 bg-canvas border border-ink/20 px-2.5 py-1.5 text-xs font-editorial-mono text-ink-muted-2">
+              <div className="flex items-center space-x-1.5 bg-canvas border border-hairline-strong px-2.5 py-1.5 text-xs font-editorial-mono text-ink-muted-2 rounded-md">
                 <SlidersHorizontal className="w-3.5 h-3.5 text-ink" />
                 <select
                   value={sortBy}
@@ -657,7 +657,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           {/* Project List / Grid with Serial Numbers */}
           {filteredProjects.length === 0 ? (
-            <div className="p-12 text-center bg-paper border border-ink/20 space-y-3">
+            <div className="p-12 text-center bg-paper border border-hairline space-y-3 rounded-xl">
               <FileText className="w-10 h-10 text-ink-muted-2 mx-auto" />
               <p className="text-ink font-bold text-sm">No projects matched your search criteria.</p>
               <button
@@ -682,7 +682,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-editorial text-lg font-bold text-ink uppercase tracking-wider flex items-center space-x-2">
+              <h3 className="font-editorial text-lg text-ink uppercase tracking-wider flex items-center space-x-2">
                 <BookOpen className="w-5 h-5 text-ink" />
                 <span>Create From Official Academic Templates</span>
               </h3>
@@ -714,10 +714,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* Footer */}
-      <footer className="bg-canvas border-t border-ink/15 py-2 text-ink-muted-2 text-xs font-editorial-mono">
+      <footer className="bg-canvas border-t border-hairline py-2 text-ink-muted-2 text-xs font-editorial-mono">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center space-x-2">
-            <span className="font-editorial font-bold text-ink">TeXForge Workspace</span>
+            <span className="font-editorial text-ink">TeXForge Workspace</span>
             <span>•</span>
             <span>Project Serials System (#01 - #{String(projects.length).padStart(2, '0')})</span>
           </div>

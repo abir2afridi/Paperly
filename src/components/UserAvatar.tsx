@@ -20,7 +20,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
     return (
       <div
         style={{ width: size, height: size, fontSize: Math.max(10, Math.round(size * 0.4)) }}
-        className={`border border-ink/30 bg-paper-deep flex items-center justify-center text-ink font-editorial font-bold ${className}`}
+        className={`border border-hairline-strong bg-paper-deep flex items-center justify-center text-ink font-editorial rounded-md ${className}`}
         title={name}
       >
         {(name || '?').charAt(0).toUpperCase()}
@@ -37,7 +37,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
       height={size}
       style={{ width: size, height: size, objectFit: 'cover' }}
       onError={() => setUseFallback(true)}
-      className={`border border-ink/30 ${className}`}
+      className={`border border-hairline-strong rounded-md ${className}`}
     />
   );
 };

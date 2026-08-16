@@ -26,7 +26,7 @@ A full-stack, browser-based **LaTeX editor** with real-time PDF compilation, ric
 - **PWA / Offline** — web app manifest, service worker, offline banner (production builds)
 - **Onboarding Tour** — one-time guided 5-step tour plus a shortcuts cheatsheet (`Ctrl/Cmd + /`)
 - **Dashboard & Landing** — project management with serial-numbered projects, login/signup UI (email + Google OAuth)
-- **Editorial Paper Design** — landing, login, and dashboard pages styled as a scholarly journal: warm paper canvas (`#fcfaf7`), obsidian ink (`#191919`), serif display headings (Newsreader), and crisp 1px hairlines
+- **Supabaze-Inspired Design Language** — landing, login, and dashboard pages on a white canvas (`#ffffff`) with near-black ink (`#171717`), a single emerald primary (`#3ecf8e`) for CTAs and accent dots, hairline grey borders, Inter display tier at weight 500 with negative tracking, system-mono code blocks, 6px button / 12px card radii (see `docs/DESIGN-supabase.md`)
 - **Light / Dark Mode Toggle** — one-click Sun/Moon switch across landing, login, and dashboard (persisted in LocalStorage), plus 5 customizable workspace/editor themes
 
 ## 🧱 Tech Stack
@@ -35,7 +35,7 @@ A full-stack, browser-based **LaTeX editor** with real-time PDF compilation, ric
 | -------- | ---------------------------------------------------------------------------------- |
 | Frontend | React 19 · TypeScript · Tailwind CSS v4 · Motion                                   |
 | Editor   | Monaco Editor · KaTeX · pdfjs-dist                                                 |
-| Design   | Editorial paper/ink tokens (Tailwind `@theme`) · Newsreader · Plus Jakarta Sans · JetBrains Mono |
+| Design   | White-canvas/ink/emerald tokens (Tailwind `@theme`) · Inter · system mono |
 | Backend  | Express 4 · Vite (dev middleware) · Node.js · y-websocket (collab) · Resend (email) |
 | Database | Supabase (Postgres + Auth + RLS) · encrypted AI provider configs · LocalStorage drafts |
 | Desktop  | Tauri 2 (optional native shell: `npm run tauri:dev`)                                |

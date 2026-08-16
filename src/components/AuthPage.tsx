@@ -37,7 +37,7 @@ interface AuthPageProps {
 const FEATURES = [
   { icon: FileText, title: 'Cloud Projects & Autosave', text: 'Projects, files and revisions sync to your account automatically.' },
   { icon: Wand2, title: 'AI Co-authoring', text: 'Ask the assistant to fix errors, rewrite passages or generate BibTeX.' },
-  { icon: Sparkles, title: 'WASM LaTeX Compilation', text: 'Compile PDFLATEX / XELATEX / LUALATEX right in the browser.' },
+  { icon: Sparkles, title: 'Instant TeX Compilation', text: 'Parser-based LaTeX typesetting with live PDF preview right in the browser.' },
   { icon: MessagesSquare, title: 'Review Comments & Chat', text: 'Leave inline comments and chat with collaborators in real time.' },
   { icon: History, title: 'Version Snapshots', text: 'Save checkpoints of your manuscript and restore any point in time.' },
   { icon: GitBranch, title: 'GitHub Sync', text: 'Push and pull manuscripts straight from your repositories.' },
@@ -148,64 +148,64 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
   return (
     <div className="min-h-screen w-full bg-canvas text-ink font-editorial-sans flex">
-      {/* Left Brand / Feature Panel */}
-      <div className="hidden lg:flex w-[46%] min-w-[420px] flex-col justify-between p-10 bg-ink text-canvas relative overflow-hidden">
+      {/* Left Brand / Feature Panel — white canvas marketing track with hairline chrome */}
+      <div className="hidden lg:flex w-[46%] min-w-[420px] flex-col justify-between p-10 bg-canvas text-ink border-r border-hairline relative">
         <div className="relative z-10">
           <div className="flex items-center space-x-2.5">
-            <div className="w-9 h-9 bg-canvas text-ink flex items-center justify-center font-editorial font-bold text-lg">
-              TeX
+            <div className="w-9 h-9 bg-ink text-canvas flex items-center justify-center font-editorial text-lg rounded-md">
+              TeX<span className="text-primary">.</span>
             </div>
             <div>
-              <div className="font-editorial font-bold text-lg tracking-tight leading-none">TeXForge</div>
-              <div className="text-[10px] font-editorial-mono text-canvas/60 mt-0.5 uppercase tracking-widest">
+              <div className="font-editorial text-lg tracking-tight leading-none">TeXForge</div>
+              <div className="text-[10px] font-editorial-mono text-ink-muted-2 mt-0.5 uppercase tracking-widest">
                 Scientific Publishing Platform
               </div>
             </div>
           </div>
 
-          <h2 className="font-editorial font-bold text-3xl mt-10 leading-snug tracking-tight">
+          <h2 className="font-editorial text-3xl mt-10 leading-snug tracking-tight">
             Write. Compile. Publish.
             <br />
-            <span className="text-canvas/70">Your manuscripts, everywhere.</span>
+            <span className="text-ink-muted">Your manuscripts, everywhere.</span>
           </h2>
 
           <ul className="mt-8 space-y-4">
             {FEATURES.map(f => (
               <li key={f.title} className="flex items-start space-x-3">
-                <div className="w-7 h-7 shrink-0 bg-canvas/10 border border-canvas/20 flex items-center justify-center">
-                  <f.icon className="w-3.5 h-3.5 text-canvas" />
+                <div className="w-7 h-7 shrink-0 bg-paper border border-hairline-strong flex items-center justify-center rounded-md">
+                  <f.icon className="w-3.5 h-3.5 text-ink" />
                 </div>
                 <div>
-                  <div className="text-sm font-bold text-canvas">{f.title}</div>
-                  <div className="text-[11px] text-canvas/60 mt-0.5">{f.text}</div>
+                  <div className="text-sm font-medium text-ink">{f.title}</div>
+                  <div className="text-[11px] text-ink-muted mt-0.5">{f.text}</div>
                 </div>
               </li>
             ))}
           </ul>
         </div>
 
-        <div className="relative z-10 text-[10px] font-editorial-mono text-canvas/50 uppercase tracking-widest">
-          Live WASM Compilation · Cloud Autosave · AI Co-authoring
+        <div className="relative z-10 text-[10px] font-editorial-mono text-ink-muted-2 uppercase tracking-widest">
+          Instant TeX Preview · Cloud Autosave · AI Co-authoring
         </div>
       </div>
 
       {/* Right Form Panel */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
-        <header className="h-14 px-4 sm:px-8 flex items-center justify-between border-b border-ink/15">
+        <header className="h-14 px-4 sm:px-8 flex items-center justify-between border-b border-hairline">
           <button
             onClick={onBack}
-            className="flex items-center space-x-1.5 text-[11px] font-editorial-mono font-bold uppercase tracking-widest text-ink-muted-2 hover:text-ink transition-colors"
+            className="flex items-center space-x-1.5 text-[11px] font-editorial-mono font-bold uppercase tracking-widest text-ink-muted-2 hover:text-ink transition-colors rounded-md"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back to Home</span>
           </button>
 
           <div className="lg:hidden flex items-center space-x-2">
-            <div className="w-6 h-6 bg-ink flex items-center justify-center text-canvas font-editorial font-bold text-xs">
-              TeX
+            <div className="w-6 h-6 bg-ink flex items-center justify-center text-canvas font-editorial text-xs rounded-md">
+              TeX<span className="text-primary">.</span>
             </div>
-            <span className="font-editorial font-bold text-sm tracking-tight">TeXForge</span>
+            <span className="font-editorial text-sm tracking-tight">TeXForge</span>
           </div>
 
           <div className="hidden sm:flex items-center space-x-1.5 text-[10px] font-editorial-mono text-ink-muted-2 uppercase tracking-widest">
@@ -217,12 +217,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         {/* Centered form */}
         <main className="flex-1 flex items-start sm:items-center justify-center p-4 sm:p-8 overflow-y-auto">
           <div className="w-full max-w-md">
-            <div className="h-1 w-full bg-ink" />
+            <div className="h-1 w-full bg-primary" />
 
-            <div className="bg-canvas border border-ink/30 border-t-0 overflow-hidden">
+            <div className="bg-canvas border border-hairline-strong border-t-0 overflow-hidden rounded-b-xl">
               {/* Header */}
-              <div className="px-6 pt-5 pb-4 border-b border-ink/15">
-                <h3 className="font-editorial font-bold text-ink text-xl tracking-tight">
+              <div className="px-6 pt-5 pb-4 border-b border-hairline">
+                <h3 className="font-editorial text-ink text-xl tracking-tight">
                   {mode === 'login' ? 'Welcome back, Author' : 'Create your Academic Account'}
                 </h3>
                 <p className="text-xs font-editorial-mono text-ink-muted-2 mt-1">
@@ -233,7 +233,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               </div>
 
               {/* Tab Switcher */}
-              <div className="grid grid-cols-2 border-b border-ink/15 text-xs font-bold uppercase tracking-wider">
+              <div className="grid grid-cols-2 border-b border-hairline text-xs font-bold uppercase tracking-wider">
                 <button
                   type="button"
                   onClick={() => {
@@ -269,13 +269,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               {/* Form Body */}
               <form onSubmit={handleSubmit} className="p-6 space-y-4">
                 {error && (
-                  <div className="p-3 bg-paper border border-ink/30 text-ink-muted-2 text-xs font-editorial-mono">
+                  <div className="p-3 bg-paper border border-hairline-strong text-ink-muted-2 text-xs font-editorial-mono rounded-md">
                     {error}
                   </div>
                 )}
 
                 {notice && (
-                  <div className="p-3 bg-paper border border-ink/30 text-ink text-xs font-editorial-mono flex items-start space-x-2">
+                  <div className="p-3 bg-paper border border-hairline-strong text-ink text-xs font-editorial-mono flex items-start space-x-2 rounded-md">
                     <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" />
                     <span>{notice}</span>
                   </div>
@@ -294,7 +294,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                           value={name}
                           onChange={e => setName(e.target.value)}
                           placeholder="e.g., Dr. Aris Thorne"
-                          className="w-full bg-canvas border border-ink/20 focus:border-ink text-ink text-xs font-editorial-mono pl-9 pr-3 py-2.5 focus:outline-none placeholder:text-ink-muted-2"
+                          className="w-full bg-canvas border border-hairline-strong focus:border-ink text-ink text-xs font-editorial-mono pl-9 pr-3 py-2.5 focus:outline-none placeholder:text-ink-muted-2 rounded-md"
                           required
                         />
                       </div>
@@ -311,7 +311,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                           value={role}
                           onChange={e => setRole(e.target.value)}
                           placeholder="e.g., Associate Professor / PhD Candidate"
-                          className="w-full bg-canvas border border-ink/20 focus:border-ink text-ink text-xs font-editorial-mono pl-9 pr-3 py-2.5 focus:outline-none placeholder:text-ink-muted-2"
+                          className="w-full bg-canvas border border-hairline-strong focus:border-ink text-ink text-xs font-editorial-mono pl-9 pr-3 py-2.5 focus:outline-none placeholder:text-ink-muted-2 rounded-md"
                         />
                       </div>
                     </div>
@@ -329,7 +329,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       value={email}
                       onChange={e => setEmail(e.target.value)}
                       placeholder="author@university.edu"
-                      className="w-full bg-canvas border border-ink/20 focus:border-ink text-ink text-xs font-editorial-mono pl-9 pr-3 py-2.5 focus:outline-none placeholder:text-ink-muted-2"
+                      className="w-full bg-canvas border border-hairline-strong focus:border-ink text-ink text-xs font-editorial-mono pl-9 pr-3 py-2.5 focus:outline-none placeholder:text-ink-muted-2 rounded-md"
                       required
                     />
                   </div>
@@ -346,7 +346,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       value={password}
                       onChange={e => setPassword(e.target.value)}
                       placeholder="Minimum 6 characters"
-                      className="w-full bg-canvas border border-ink/20 focus:border-ink text-ink text-xs font-editorial-mono pl-9 pr-3 py-2.5 focus:outline-none placeholder:text-ink-muted-2"
+                      className="w-full bg-canvas border border-hairline-strong focus:border-ink text-ink text-xs font-editorial-mono pl-9 pr-3 py-2.5 focus:outline-none placeholder:text-ink-muted-2 rounded-md"
                       required
                     />
                   </div>
@@ -355,7 +355,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full py-3 bg-ink hover:opacity-90 text-canvas font-bold text-xs uppercase tracking-widest flex items-center justify-center space-x-2 transition-opacity"
+                  className="w-full py-3 bg-primary hover:bg-primary-deep text-on-primary font-bold text-xs uppercase tracking-widest flex items-center justify-center space-x-2 transition-colors rounded-md"
                 >
                   {isLoading ? (
                     <span>Authenticating...</span>
@@ -372,7 +372,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   type="button"
                   disabled={isLoading}
                   onClick={handleGoogleSignIn}
-                  className="w-full py-3 bg-paper hover:bg-paper-deep border border-ink/25 text-ink font-bold text-xs uppercase tracking-widest flex items-center justify-center space-x-2 transition-colors"
+                  className="w-full py-3 bg-canvas hover:bg-paper border border-hairline-strong text-ink font-bold text-xs uppercase tracking-widest flex items-center justify-center space-x-2 transition-colors rounded-md"
                 >
                   <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
                     <path
@@ -396,7 +396,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 </button>
 
                 {/* Local / Guest Mode Helper */}
-                <div className="pt-3 border-t border-ink/15 space-y-2">
+                <div className="pt-3 border-t border-hairline space-y-2">
                   <div className="flex items-center justify-between text-[10px] font-editorial-mono text-ink-muted-2">
                     <span className="uppercase tracking-wider">No account needed:</span>
                     <ShieldCheck className="w-3.5 h-3.5 text-ink" />
@@ -407,7 +407,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       setError('');
                       onBack();
                     }}
-                    className="w-full p-2 bg-paper hover:bg-paper-deep border border-ink/20 flex items-center justify-center space-x-2 text-[11px] font-bold text-ink uppercase tracking-wider transition-colors"
+                    className="w-full p-2 bg-canvas hover:bg-paper border border-hairline-strong flex items-center justify-center space-x-2 text-[11px] font-bold text-ink uppercase tracking-wider transition-colors rounded-md"
                   >
                     <UserRound className="w-4 h-4" />
                     <span>Continue as Guest (Local Mode)</span>

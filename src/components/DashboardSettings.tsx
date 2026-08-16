@@ -105,11 +105,11 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
 
   const sectionTitle = (icon: React.ReactNode, title: string, subtitle: string) => (
     <div className="flex items-center space-x-3">
-      <div className="w-9 h-9 bg-ink text-canvas flex items-center justify-center shrink-0">
+      <div className="w-9 h-9 bg-ink text-canvas flex items-center justify-center shrink-0 rounded-md">
         {icon}
       </div>
       <div>
-        <h2 className="font-editorial text-lg font-bold text-ink uppercase tracking-wider">{title}</h2>
+        <h2 className="font-editorial text-lg text-ink uppercase tracking-wider">{title}</h2>
         <p className="text-ink-muted-2 text-xs font-editorial-mono">{subtitle}</p>
       </div>
     </div>
@@ -124,7 +124,7 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
     <button
       onClick={onClick}
       disabled={disabled || state === 'saving'}
-      className="px-4 py-2 bg-ink hover:opacity-90 disabled:opacity-40 text-canvas font-bold text-xs uppercase tracking-widest flex items-center space-x-2 transition-opacity"
+      className="px-4 py-2 bg-primary hover:bg-primary-deep disabled:opacity-40 text-on-primary font-bold text-xs uppercase tracking-widest flex items-center space-x-2 transition-colors rounded-md"
     >
       {state === 'saved' ? (
         <>
@@ -144,7 +144,7 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="bg-paper border border-ink/20 p-4 flex items-start space-x-3">
+      <div className="bg-paper border border-hairline p-4 flex items-start space-x-3 rounded-xl">
         <AlertTriangle className="w-4 h-4 text-ink shrink-0 mt-0.5" />
         <p className="text-xs text-ink-muted leading-relaxed font-medium">
           {isCloudUser
@@ -154,7 +154,7 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
       </div>
 
       {/* Profile Section */}
-      <div className="bg-paper border border-ink/20 p-6 space-y-5">
+      <div className="bg-canvas border border-hairline p-6 space-y-5 rounded-xl">
         {sectionTitle(<User className="w-4 h-4" />, 'Profile', 'Your public academic identity')}
 
         <div className="flex items-center space-x-4">
@@ -177,7 +177,7 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
               value={displayName}
               onChange={e => setDisplayName(e.target.value)}
               disabled={!isCloudUser}
-              className="w-full bg-canvas border border-ink/20 text-ink text-xs px-3 py-2 focus:outline-none focus:border-ink disabled:opacity-50 placeholder:text-ink-muted-2"
+              className="w-full bg-canvas border border-hairline-strong text-ink text-xs px-3 py-2 focus:outline-none focus:border-ink disabled:opacity-50 placeholder:text-ink-muted-2 rounded-md"
               placeholder="Your name"
             />
           </div>
@@ -190,7 +190,7 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
               value={academicRole}
               onChange={e => setAcademicRole(e.target.value)}
               disabled={!isCloudUser}
-              className="w-full bg-canvas border border-ink/20 text-ink text-xs px-3 py-2 focus:outline-none focus:border-ink disabled:opacity-50 placeholder:text-ink-muted-2"
+              className="w-full bg-canvas border border-hairline-strong text-ink text-xs px-3 py-2 focus:outline-none focus:border-ink disabled:opacity-50 placeholder:text-ink-muted-2 rounded-md"
               placeholder="e.g. PhD Candidate, Postdoc Researcher"
             />
           </div>
@@ -202,7 +202,7 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
               type="text"
               value={user.email}
               readOnly
-              className="w-full bg-canvas border border-ink/20 text-ink-muted-2 text-xs px-3 py-2 cursor-not-allowed"
+              className="w-full bg-canvas border border-hairline-strong text-ink-muted-2 text-xs px-3 py-2 cursor-not-allowed rounded-md"
             />
           </div>
           <div className="space-y-1.5 md:col-span-2">
@@ -215,13 +215,13 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
                 value={avatarUrl}
                 onChange={e => setAvatarUrl(e.target.value)}
                 disabled={!isCloudUser}
-                className="flex-1 bg-canvas border border-ink/20 text-ink text-xs px-3 py-2 focus:outline-none focus:border-ink disabled:opacity-50 placeholder:text-ink-muted-2"
+                className="flex-1 bg-canvas border border-hairline-strong text-ink text-xs px-3 py-2 focus:outline-none focus:border-ink disabled:opacity-50 placeholder:text-ink-muted-2 rounded-md"
                 placeholder="https://…"
               />
               <button
                 onClick={() => setAvatarUrl('')}
                 disabled={!isCloudUser}
-                className="px-3 bg-canvas border border-ink/20 text-ink-muted-2 hover:text-ink hover:border-ink text-xs font-bold flex items-center space-x-1.5 disabled:opacity-50 transition-colors"
+                className="px-3 bg-canvas border border-hairline-strong text-ink-muted-2 hover:text-ink hover:border-ink text-xs font-bold flex items-center space-x-1.5 disabled:opacity-50 transition-colors rounded-md"
                 title="Reset to Gravatar"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -231,7 +231,7 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center justify-between pt-2 border-t border-ink/15">
+        <div className="flex items-center justify-between pt-2 border-t border-hairline">
           {saveState === 'error' ? (
             <span className="text-xs text-red-700 font-bold">{saveError}</span>
           ) : (
@@ -244,7 +244,7 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
       </div>
 
       {/* Security Section */}
-      <div className="bg-paper border border-ink/20 p-6 space-y-5">
+      <div className="bg-canvas border border-hairline p-6 space-y-5 rounded-xl">
         {sectionTitle(<ShieldCheck className="w-4 h-4" />, 'Security', 'Manage your account password')}
 
         {!isCloudUser ? (
@@ -264,7 +264,7 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
                     type="password"
                     value={newPassword}
                     onChange={e => setNewPassword(e.target.value)}
-                    className="w-full bg-canvas border border-ink/20 text-ink text-xs pl-8 pr-3 py-2 focus:outline-none focus:border-ink placeholder:text-ink-muted-2"
+                    className="w-full bg-canvas border border-hairline-strong text-ink text-xs pl-8 pr-3 py-2 focus:outline-none focus:border-ink placeholder:text-ink-muted-2 rounded-md"
                     placeholder="Min. 6 characters"
                   />
                 </div>
@@ -279,13 +279,13 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
                     type="password"
                     value={confirmPassword}
                     onChange={e => setConfirmPassword(e.target.value)}
-                    className="w-full bg-canvas border border-ink/20 text-ink text-xs pl-8 pr-3 py-2 focus:outline-none focus:border-ink placeholder:text-ink-muted-2"
+                    className="w-full bg-canvas border border-hairline-strong text-ink text-xs pl-8 pr-3 py-2 focus:outline-none focus:border-ink placeholder:text-ink-muted-2 rounded-md"
                     placeholder="Repeat password"
                   />
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-between pt-2 border-t border-ink/15">
+            <div className="flex items-center justify-between pt-2 border-t border-hairline">
               {passwordState === 'error' ? (
                 <span className="text-xs text-red-700 font-bold">{passwordError}</span>
               ) : (
@@ -305,7 +305,7 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
       </div>
 
       {/* Appearance Section */}
-      <div className="bg-paper border border-ink/20 p-6 space-y-5">
+      <div className="bg-canvas border border-hairline p-6 space-y-5 rounded-xl">
         {sectionTitle(<Palette className="w-4 h-4" />, 'Appearance', 'Editor & workspace theme presets')}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -315,10 +315,10 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
               <button
                 key={theme.id}
                 onClick={() => onSelectTheme(theme.id)}
-                className={`text-left p-4 border transition-colors flex flex-col space-y-2 ${
+                className={`text-left p-4 border transition-colors flex flex-col space-y-2 rounded-lg ${
                   isActive
                     ? 'bg-canvas border-ink shadow-[3px_3px_0_0_var(--th-accent,#d11111)]'
-                    : 'bg-canvas border-ink/20 hover:border-ink/50'
+                    : 'bg-canvas border-hairline-strong hover:border-ink/50'
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -345,13 +345,13 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
       </div>
 
       {/* Integrations Section */}
-      <div className="bg-paper border border-ink/20 p-6 space-y-5">
+      <div className="bg-canvas border border-hairline p-6 space-y-5 rounded-xl">
         {sectionTitle(<Sparkles className="w-4 h-4" />, 'Integrations', 'AI assistants & application info')}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <button
             onClick={onOpenAiSettings}
-            className="p-4 bg-canvas border border-ink/20 hover:border-ink/50 transition-colors flex items-start justify-between text-left"
+            className="p-4 bg-canvas border border-hairline-strong hover:border-ink/50 transition-colors flex items-start justify-between text-left rounded-lg"
           >
             <div className="space-y-1">
               <p className="text-xs font-bold text-ink">AI Provider Settings</p>
@@ -364,7 +364,7 @@ export const DashboardSettings: React.FC<DashboardSettingsProps> = ({
 
           <button
             onClick={onOpenAbout}
-            className="p-4 bg-canvas border border-ink/20 hover:border-ink/50 transition-colors flex items-start justify-between text-left"
+            className="p-4 bg-canvas border border-hairline-strong hover:border-ink/50 transition-colors flex items-start justify-between text-left rounded-lg"
           >
             <div className="space-y-1">
               <p className="text-xs font-bold text-ink">About TeXForge</p>
